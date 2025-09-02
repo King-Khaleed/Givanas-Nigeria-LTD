@@ -1,190 +1,251 @@
--- 1. Custom Types (Enums)
-CREATE TYPE public.role AS ENUM ('admin', 'staff', 'client');
-CREATE TYPE public.file_status AS ENUM ('pending', 'processing', 'completed', 'failed');
-CREATE TYPE public.report_status AS ENUM ('draft', 'final');
 
--- 2. Tables Creation
+-- 1. Create custom types (enums)
+create type public.user_role as enum ('admin', 'staff', 'client');
+create type public.file_status as enum ('pending', 'processing', 'completed', 'failed');
+create type public.report_status as enum ('draft', 'final', 'failed');
 
--- organizations Table
-CREATE TABLE public.organizations (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    name character varying NOT NULL,
-    description text,
-    industry character varying,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+-- 2. Create organizations table
+create table public.organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamp with time zone not null default now()
 );
-ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+comment on table public.organizations is 'Stores organization data.';
 
--- profiles Table
-CREATE TABLE public.profiles (
-    id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email character varying NOT NULL UNIQUE,
-    full_name text,
-    role public.role DEFAULT 'client'::public.role NOT NULL,
-    organization_id uuid REFERENCES public.organizations(id) ON DELETE SET NULL,
-    phone character varying,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+-- 3. Create profiles table
+create table public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  email text not null unique,
+  full_name text,
+  "role" user_role not null default 'client',
+  organization_id uuid references public.organizations (id) on delete set null,
+  phone text,
+  is_active boolean not null default true,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
 );
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE INDEX profiles_email_idx ON public.profiles USING btree (email);
-CREATE INDEX profiles_organization_id_idx ON public.profiles USING btree (organization_id);
+comment on table public.profiles is 'Stores user profile data, linked to auth.users.';
 
--- financial_records Table
-CREATE TABLE public.financial_records (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    uploaded_by uuid NOT NULL REFERENCES auth.users(id),
-    file_name character varying NOT NULL,
-    file_path character varying NOT NULL,
-    file_type character varying NOT NULL,
-    file_size bigint NOT NULL,
-    status public.file_status DEFAULT 'pending'::public.file_status NOT NULL,
-    analysis_results jsonb,
-    risk_flags jsonb,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+-- 4. Create financial_records table
+create table public.financial_records (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  uploaded_by uuid not null references public.profiles (id) on delete cascade,
+  file_name text not null,
+  file_path text not null,
+  file_type text not null,
+  file_size bigint not null,
+  status file_status not null default 'pending',
+  risk_level text,
+  analysis_results jsonb,
+  created_at timestamp with time zone not null default now()
 );
-ALTER TABLE public.financial_records ENABLE ROW LEVEL SECURITY;
-CREATE INDEX financial_records_organization_id_idx ON public.financial_records USING btree (organization_id);
-CREATE INDEX financial_records_created_at_idx ON public.financial_records USING btree (created_at);
+comment on table public.financial_records is 'Stores metadata for uploaded financial documents.';
 
--- audit_reports Table
-CREATE TABLE public.audit_reports (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    generated_by uuid NOT NULL REFERENCES auth.users(id),
-    title character varying NOT NULL,
-    report_data jsonb NOT NULL,
-    recommendations text,
-    status public.report_status DEFAULT 'draft'::public.report_status NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+-- 5. Create audit_reports table
+create table public.audit_reports (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  generated_by uuid not null references public.profiles (id) on delete cascade,
+  title text not null,
+  summary text,
+  key_metrics text,
+  top_risk_areas text,
+  recommendations text,
+  status report_status not null default 'draft',
+  created_at timestamp with time zone not null default now()
 );
-ALTER TABLE public.audit_reports ENABLE ROW LEVEL SECURITY;
-CREATE INDEX audit_reports_organization_id_idx ON public.audit_reports USING btree (organization_id);
+comment on table public.audit_reports is 'Stores generated audit reports.';
 
--- activities Table
-CREATE TABLE public.activities (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    user_id uuid NOT NULL REFERENCES auth.users(id),
-    organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    action text NOT NULL,
-    details jsonb,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+-- 6. Create activities table
+create table public.activities (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  action text not null,
+  details jsonb,
+  created_at timestamp with time zone not null default now()
 );
-ALTER TABLE public.activities ENABLE ROW LEVEL SECURITY;
-CREATE INDEX activities_organization_id_idx ON public.activities USING btree (organization_id);
-CREATE INDEX activities_user_id_idx ON public.activities USING btree (user_id);
+comment on table public.activities is 'Logs user actions within the platform.';
 
--- 3. Row Level Security (RLS) Policies
+-- 7. Add Database Indexes
+create index idx_profiles_email on public.profiles (email);
+create index idx_profiles_organization_id on public.profiles (organization_id);
+create index idx_financial_records_organization_id on public.financial_records (organization_id);
+create index idx_audit_reports_organization_id on public.audit_reports (organization_id);
+create index idx_activities_organization_id on public.activities (organization_id);
+create index idx_activities_user_id on public.activities (user_id);
+create index idx_activities_created_at on public.activities (created_at desc);
 
--- Helper function to get user's role
-CREATE OR REPLACE FUNCTION get_user_role(user_id uuid) RETURNS public.role AS $$
-  SELECT role FROM public.profiles WHERE id = user_id;
-$$ LANGUAGE sql STABLE;
+-- 8. Create a helper function to get a user's organization ID
+create or replace function public.get_user_organization_id(user_id uuid)
+returns uuid
+language sql
+security definer
+as $$
+  select organization_id
+  from public.profiles
+  where id = user_id;
+$$;
 
--- Helper function to get user's organization_id
-CREATE OR REPLACE FUNCTION get_user_organization_id(user_id uuid) RETURNS uuid AS $$
-  SELECT organization_id FROM public.profiles WHERE id = user_id;
-$$ LANGUAGE sql STABLE;
+-- 9. Create a helper function to check if a user is an admin
+create or replace function public.is_admin(user_id uuid)
+returns boolean
+language sql
+security definer
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = user_id and role = 'admin'
+  );
+$$;
 
--- RLS for profiles
-CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+-- 10. Set up Row Level Security (RLS)
+-- Enable RLS for all relevant tables
+alter table public.profiles enable row level security;
+alter table public.organizations enable row level security;
+alter table public.financial_records enable row level security;
+alter table public.audit_reports enable row level security;
+alter table public.activities enable row level security;
 
--- RLS for organizations
-CREATE POLICY "Admins can view all organizations" ON public.organizations FOR SELECT USING (get_user_role(auth.uid()) = 'admin');
-CREATE POLICY "Users can view their own organization" ON public.organizations FOR SELECT USING (id = get_user_organization_id(auth.uid()));
+-- RLS Policies for `profiles` table
+create policy "Users can view their own profile" on public.profiles
+  for select using (auth.uid() = id);
+create policy "Users can update their own profile" on public.profiles
+  for update using (auth.uid() = id);
+create policy "Admins can view/manage all profiles" on public.profiles
+  for all using (public.is_admin(auth.uid()));
 
--- RLS for financial_records
-CREATE POLICY "Users can access records from their own organization" ON public.financial_records FOR ALL USING (organization_id = get_user_organization_id(auth.uid()));
+-- RLS Policies for `organizations` table
+create policy "Users can view their own organization" on public.organizations
+  for select using (id = public.get_user_organization_id(auth.uid()));
+create policy "Admins can view/manage all organizations" on public.organizations
+  for all using (public.is_admin(auth.uid()));
 
--- RLS for audit_reports
-CREATE POLICY "Users can access reports from their own organization" ON public.audit_reports FOR ALL USING (organization_id = get_user_organization_id(auth.uid()));
+-- RLS Policies for `financial_records` table
+create policy "Users can view records in their own organization" on public.financial_records
+  for select using (organization_id = public.get_user_organization_id(auth.uid()));
+create policy "Users can insert records into their own organization" on public.financial_records
+  for insert with check (organization_id = public.get_user_organization_id(auth.uid()));
+create policy "Admins can manage all financial records" on public.financial_records
+  for all using (public.is_admin(auth.uid()));
 
--- RLS for activities
-CREATE POLICY "Users can view activities from their own organization" ON public.activities FOR SELECT USING (organization_id = get_user_organization_id(auth.uid()));
+-- RLS Policies for `audit_reports` table
+create policy "Users can view reports in their own organization" on public.audit_reports
+  for select using (organization_id = public.get_user_organization_id(auth.uid()));
+create policy "Users can insert reports into their own organization" on public.audit_reports
+  for insert with check (organization_id = public.get_user_organization_id(auth.uid()));
+create policy "Admins can manage all audit reports" on public.audit_reports
+  for all using (public.is_admin(auth.uid()));
 
--- 4. Storage Bucket
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('financial-records', 'financial-records', false, 52428800, ARRAY['application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'image/jpeg', 'image/png'])
-ON CONFLICT (id) DO NOTHING;
+-- RLS Policies for `activities` table
+create policy "Users can view activities in their own organization" on public.activities
+  for select using (organization_id = public.get_user_organization_id(auth.uid()));
+create policy "Admins can view all activities" on public.activities
+  for select using (public.is_admin(auth.uid()));
 
--- Storage policies
-CREATE POLICY "Users can upload to their organization's folder"
-ON storage.objects FOR INSERT
-WITH CHECK (
+-- 11. Create Supabase Storage Bucket
+-- Note: This is illustrative. Bucket creation is best done via Supabase UI.
+-- The RLS policies below are the crucial part.
+insert into storage.buckets (id, name, public)
+values ('financial-records', 'financial-records', false)
+on conflict (id) do nothing;
+
+-- 12. Corrected Storage RLS Policies
+-- First, drop any existing (potentially broken) policies on the storage objects.
+drop policy if exists "Users can upload to their organization's folder" on storage.objects;
+drop policy if exists "Users can view files in their organization's folder" on storage.objects;
+drop policy if exists "Users can delete files in their organization's folder" on storage.objects;
+
+-- Add a generated column to extract the organization folder from the file path.
+-- This is more performant than using functions in RLS policies.
+alter table storage.objects
+add column if not exists org_folder text
+generated always as (split_part(name, '/', 1)) stored;
+
+-- Add an index on the new generated column for faster lookups.
+create index if not exists idx_storage_objects_org_folder
+on storage.objects (org_folder);
+
+-- Enable RLS on storage.objects
+alter table storage.objects enable row level security;
+
+-- Create the fixed RLS policies using the generated column.
+create policy "Users can upload to their organization's folder"
+on storage.objects for insert
+with check (
     bucket_id = 'financial-records'
-    AND (storage.folder_name(name))[1] = get_user_organization_id(auth.uid())::text
+    and org_folder = get_user_organization_id(auth.uid())::text
 );
 
-CREATE POLICY "Users can view files in their organization's folder"
-ON storage.objects FOR SELECT
-USING (
+create policy "Users can view files in their organization's folder"
+on storage.objects for select
+using (
     bucket_id = 'financial-records'
-    AND (storage.folder_name(name))[1] = get_user_organization_id(auth.uid())::text
+    and org_folder = get_user_organization_id(auth.uid())::text
 );
 
-CREATE POLICY "Users can delete files in their organization's folder"
-ON storage.objects FOR DELETE
-USING (
+create policy "Users can delete files in their organization's folder"
+on storage.objects for delete
+using (
     bucket_id = 'financial-records'
-    AND (storage.folder_name(name))[1] = get_user_organization_id(auth.uid())::text
+    and org_folder = get_user_organization_id(auth.uid())::text
 );
 
 
--- 5. Database Functions & Triggers
-
--- Function to update 'updated_at' timestamp
-CREATE OR REPLACE FUNCTION public.handle_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger for profiles table
-CREATE TRIGGER on_profile_updated
-BEFORE UPDATE ON public.profiles
-FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
-
--- Function to handle new user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
+-- 13. Create Database Triggers
+-- Function to auto-create profile and organization on new user signup
+create or replace function public.on_auth_user_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
   new_org_id uuid;
-BEGIN
-  -- Create a new organization for the user
-  INSERT INTO public.organizations (name)
-  VALUES (new.raw_user_meta_data->>'organization_name')
-  RETURNING id INTO new_org_id;
+  user_role user_role;
+begin
+  -- Determine role, default to 'staff' if not provided
+  user_role := coalesce((new.raw_user_meta_data->>'role')::user_role, 'staff');
 
-  -- Insert a new profile for the user
-  INSERT INTO public.profiles (id, email, full_name, role, organization_id, phone)
-  VALUES (
+  -- Create a new organization for the user
+  insert into public.organizations (name)
+  values (new.raw_user_meta_data->>'organization_name')
+  returning id into new_org_id;
+
+  -- Create a new profile for the user
+  insert into public.profiles (id, email, full_name, role, organization_id, phone)
+  values (
     new.id,
     new.email,
     new.raw_user_meta_data->>'full_name',
-    (new.raw_user_meta_data->>'role')::public.role,
+    user_role,
     new_org_id,
     new.raw_user_meta_data->>'phone'
   );
   
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+  return new;
+end;
+$$;
 
--- Trigger for auth.users table
-CREATE TRIGGER on_auth_user_created
-AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+-- Trigger to call the function after a new user is created
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.on_auth_user_created();
 
--- We must disable the old logic in `auth.ts` that creates a profile.
--- The trigger now handles both organization and profile creation atomically.
--- The user will need to remove the profile insertion logic from the `signup` server action.
+-- Function to update the `updated_at` timestamp on profile changes
+create or replace function public.handle_profile_update()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
--- Override the default user creation logic in `auth.ts`.
--- With this trigger, `auth.ts` no longer needs to insert into `profiles`.
--- The user should modify the `signup` function to remove the `supabase.from('profiles').insert(...)` call.
--- This trigger makes the process atomic and handles organization creation.
--- The original `auth.ts` had a potential race condition and failure mode if profile creation failed after user creation. This trigger solves that.
+-- Trigger to call the function before a profile is updated
+create trigger on_profile_update
+  before update on public.profiles
+  for each row execute procedure public.handle_profile_update();

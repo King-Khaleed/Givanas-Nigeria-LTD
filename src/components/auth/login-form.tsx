@@ -63,8 +63,8 @@ export function LoginForm() {
         title: "Login Successful",
         description: "Welcome back!",
       });
-      router.push(result.redirectTo || "/dashboard");
-      router.refresh(); // This is crucial to re-fetch server state
+      // This is crucial to re-fetch server state and trigger the layout to re-render
+      router.refresh();
     }
   }
 

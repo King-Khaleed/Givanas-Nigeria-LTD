@@ -20,34 +20,41 @@ export default async function Dashboard() {
 
     let recentUploads = [];
     let fileStats = { total: 0, highRisk: 0 };
+    let reportCount = 0;
     
     if (user) {
-        const { data: uploads } = await supabase
-            .from('financial_records')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(3);
-        recentUploads = uploads ?? [];
+        const { data: profile } = await supabase.from('profiles').select('organization_id').single();
 
-        const { count: totalCount } = await supabase
-            .from('financial_records')
-            .select('*', { count: 'exact', head: true });
-        
-        // @ts-ignore
-        const { count: highRiskCount } = await supabase
-            .from('financial_records')
-            .select('*', { count: 'exact', head: true })
-            .eq('risk_level', 'high');
+        if (profile?.organization_id) {
+            const { data: uploads } = await supabase
+                .from('financial_records')
+                .select('*')
+                .eq('organization_id', profile.organization_id)
+                .order('created_at', { ascending: false })
+                .limit(3);
+            recentUploads = uploads ?? [];
+
+            const { count: totalCount } = await supabase
+                .from('financial_records')
+                .select('*', { count: 'exact', head: true })
+                .eq('organization_id', profile.organization_id);
             
-        fileStats.total = totalCount ?? 0;
-        fileStats.highRisk = highRiskCount ?? 0;
+            const { count: highRiskCount } = await supabase
+                .from('financial_records')
+                .select('*', { count: 'exact', head: true })
+                .eq('organization_id', profile.organization_id)
+                .eq('risk_level', 'high');
+                
+            fileStats.total = totalCount ?? 0;
+            fileStats.highRisk = highRiskCount ?? 0;
+
+            const { count: reports } = await supabase
+                .from('audit_reports')
+                .select('*', { count: 'exact', head: true })
+                .eq('organization_id', profile.organization_id);
+            reportCount = reports ?? 0;
+        }
     }
-
-
-    const recentReports = [
-        { title: "Q1 Financial Summary", date: "2024-04-05" },
-        { title: "March Expense Analysis", date: "2024-04-02" },
-    ]
 
   return (
     <div className="space-y-8">
@@ -73,7 +80,7 @@ export default async function Dashboard() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{fileStats.highRisk}</div>
-                    <p className="text-xs text-muted-foreground">3 new flags today</p>
+                    <p className="text-xs text-muted-foreground">Identified in your documents</p>
                 </CardContent>
             </Card>
             <Card>
@@ -82,8 +89,8 @@ export default async function Dashboard() {
                     <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">89</div>
-                    <p className="text-xs text-muted-foreground">5 this week</p>
+                    <div className="text-2xl font-bold">{reportCount}</div>
+                    <p className="text-xs text-muted-foreground">Total reports created</p>
                 </CardContent>
             </Card>
         </div>
@@ -106,7 +113,7 @@ export default async function Dashboard() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle>Recent Analysis</CardTitle>
+                    <CardTitle>Recent Uploads</CardTitle>
                     <CardDescription>Status of your most recent file uploads.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -126,7 +133,6 @@ export default async function Dashboard() {
                                         <Badge variant={upload.status === 'completed' ? 'default' : 'secondary'}>{upload.status}</Badge>
                                     </TableCell>
                                     <TableCell>
-                                         {/* @ts-ignore */}
                                         <Badge variant={upload.risk_level === 'high' ? 'destructive' : 'outline'}>{upload.risk_level ?? 'N/A'}</Badge>
                                     </TableCell>
                                 </TableRow>
@@ -144,21 +150,11 @@ export default async function Dashboard() {
                     <CardDescription>Your latest generated audit reports.</CardDescription>
                 </div>
                 <Button asChild>
-                    <Link href="/dashboard/reports">Generate New Report</Link>
+                    <Link href="/dashboard/reports/new">Generate New Report</Link>
                 </Button>
             </CardHeader>
             <CardContent>
-                <ul className="space-y-4">
-                    {recentReports.map(report => (
-                        <li key={report.title} className="flex items-center justify-between p-3 bg-secondary rounded-md">
-                            <div>
-                                <p className="font-medium">{report.title}</p>
-                                <p className="text-sm text-muted-foreground">Generated on {report.date}</p>
-                            </div>
-                            <Button variant="outline" size="sm">Download</Button>
-                        </li>
-                    ))}
-                </ul>
+                <p className="text-sm text-muted-foreground">Your recently generated reports will appear here.</p>
             </CardContent>
         </Card>
     </div>

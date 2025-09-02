@@ -1,3 +1,4 @@
+
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
@@ -53,6 +54,12 @@ export async function login(values: z.infer<typeof loginSchema>) {
 
     if (profile?.role === 'admin') {
       return { success: true, redirectTo: '/admin' };
+    }
+     if (profile?.role === 'staff') {
+      return { success: true, redirectTo: '/dashboard/staff' };
+    }
+     if (profile?.role === 'client') {
+      return { success: true, redirectTo: '/dashboard/client' };
     }
   }
 

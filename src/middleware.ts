@@ -1,3 +1,4 @@
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/lib/types'
@@ -68,31 +69,36 @@ export async function middleware(request: NextRequest) {
   }
 
   if (session) {
-      if (pathname.startsWith('/login') || pathname.startsWith('/register') || pathname === '/') {
-        
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
 
+      if (pathname.startsWith('/login') || pathname.startsWith('/register') || pathname === '/') {
         if (profile?.role === 'admin') {
             return NextResponse.redirect(new URL('/admin', request.url))
+        }
+        if (profile?.role === 'staff') {
+            return NextResponse.redirect(new URL('/dashboard/staff', request.url))
+        }
+         if (profile?.role === 'client') {
+            return NextResponse.redirect(new URL('/dashboard/client', request.url))
         }
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
 
       // Role-based route protection
-      if (pathname.startsWith('/admin')) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single()
+      if (pathname.startsWith('/admin') && profile?.role !== 'admin') {
+          return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
 
-          if (profile?.role !== 'admin') {
-              return NextResponse.redirect(new URL('/dashboard', request.url))
-          }
+       if (pathname.startsWith('/dashboard/staff') && profile?.role !== 'staff') {
+          return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+
+       if (pathname.startsWith('/dashboard/client') && profile?.role !== 'client') {
+          return NextResponse.redirect(new URL('/dashboard', request.url))
       }
   }
 

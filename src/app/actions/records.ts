@@ -49,7 +49,7 @@ export async function getSignedUrl(values: z.infer<typeof signedUrlSchema>) {
   }
 
   const {fileType, organizationId} = validatedFields.data;
-  const extension = fileType.split('/')[1];
+  const extension = fileType.split('/').pop() || 'bin';
   const path = `${organizationId}/${user.id}/${uuidv4()}.${extension}`;
 
   const {data: url, error} = await supabase.storage
@@ -84,6 +84,14 @@ export async function createFinancialRecord(values: FinancialRecordInsert): Prom
     if (error) {
         throw new Error(`Database Error: ${error.message}`);
     }
+
+    // Log activity
+    await supabase.from('activities').insert({
+        user_id: user.id,
+        organization_id: values.organization_id,
+        action: `Uploaded file: ${values.file_name}`,
+        details: { recordId: data.id }
+    });
     
     revalidatePath('/dashboard/records');
     revalidatePath('/dashboard');
@@ -120,6 +128,7 @@ export async function runComplianceCheck(values: z.infer<typeof complianceCheckS
         // 1. Update record status to 'processing'
         await supabase.from('financial_records').update({ status: 'processing' }).eq('id', recordId);
         revalidatePath('/dashboard/records');
+        revalidatePath(`/dashboard/records/${recordId}`);
 
         // 2. Download file from storage
         const { data: fileData, error: downloadError } = await supabase.storage.from('financial-records').download(filePath);

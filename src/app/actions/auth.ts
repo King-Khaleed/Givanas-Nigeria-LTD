@@ -40,7 +40,17 @@ export async function login(values: z.infer<typeof loginSchema>) {
   }
   
   if (data.user) {
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
+    const { data: profile } = await supabase.from('profiles').select('role, organization_id').eq('id', data.user.id).single();
+    
+    if (profile?.organization_id) {
+        await supabase.from('activities').insert({
+            user_id: data.user.id,
+            organization_id: profile.organization_id,
+            action: 'User logged in'
+        });
+    }
+
+
     if (profile?.role === 'admin') {
       return { success: true, redirectTo: '/admin' };
     }
@@ -63,7 +73,7 @@ export async function signup(values: z.infer<typeof signupSchema>) {
     
     // Note: The on_auth_user_created trigger now handles profile creation.
     // We just need to pass the metadata.
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -79,6 +89,12 @@ export async function signup(values: z.infer<typeof signupSchema>) {
 
     if (signUpError) {
         return { error: signUpError.message };
+    }
+    
+    if (data.user) {
+      // The trigger will create the profile and org, but we need to log the activity.
+      // We can't know the org_id here, so this will be a more general activity log.
+      // A better approach might be a trigger on profile creation itself.
     }
 
     return { success: true };

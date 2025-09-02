@@ -18,12 +18,11 @@ export default async function AdminDashboard() {
     const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
     const { count: reportCount } = await supabase.from('audit_reports').select('*', { count: 'exact', head: true });
 
-    const { data: recentActivities } = await supabase
+    const { data: recentActivities, error } = await supabase
         .from('activities')
         .select('*, user:profiles(full_name), organization:organizations(name)')
         .order('created_at', { ascending: false })
         .limit(5)
-
 
   return (
     <div className="space-y-8">
@@ -92,8 +91,8 @@ export default async function AdminDashboard() {
                 <TableBody>
                     {recentActivities?.map((activity) => (
                          <TableRow key={activity.id}>
-                            <TableCell className="font-medium">{activity.user?.full_name}</TableCell>
-                            <TableCell>{activity.organization?.name}</TableCell>
+                            <TableCell className="font-medium">{activity.user?.full_name ?? 'N/A'}</TableCell>
+                            <TableCell>{activity.organization?.name ?? 'N/A'}</TableCell>
                             <TableCell>{activity.action}</TableCell>
                             <TableCell className="text-right">{formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}</TableCell>
                         </TableRow>

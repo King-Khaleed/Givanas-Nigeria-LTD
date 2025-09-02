@@ -66,6 +66,14 @@ export async function generateReport(values: z.infer<typeof generateReportSchema
     if (insertError) {
         return { error: `Database Error: ${insertError.message}` };
     }
+
+    // Log activity
+    await supabase.from('activities').insert({
+        user_id: user.id,
+        organization_id: profile.organization_id,
+        action: `Started generating report: ${title}`,
+        details: { reportId: newReport.id }
+    });
     
   // 4. Trigger the AI flow asynchronously (but we'll await it here for simplicity)
   try {
@@ -88,12 +96,26 @@ export async function generateReport(values: z.infer<typeof generateReportSchema
     if (updateError) {
         throw new Error(updateError.message);
     }
+
+     await supabase.from('activities').insert({
+        user_id: user.id,
+        organization_id: profile.organization_id,
+        action: `Successfully generated report: ${title}`,
+        details: { reportId: newReport.id }
+    });
     
   } catch (aiError: any) {
      await supabase
       .from('audit_reports')
       .update({ status: 'failed' })
       .eq('id', newReport.id);
+
+      await supabase.from('activities').insert({
+        user_id: user.id,
+        organization_id: profile.organization_id,
+        action: `Failed to generate report: ${title}`,
+        details: { reportId: newReport.id, error: aiError.message }
+      });
     return { error: `AI Generation Failed: ${aiError.message}` };
   }
   

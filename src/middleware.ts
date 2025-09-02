@@ -60,16 +60,32 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getSession()
 
   const { pathname } = request.nextUrl
-
+  
   const publicRoutes = ['/', '/login', '/register', '/auth/callback']
   
   if (!session && !publicRoutes.some(path => pathname.startsWith(path))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (session && (pathname.startsWith('/login') || pathname.startsWith('/register'))) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  if (session) {
+      if (pathname.startsWith('/login') || pathname.startsWith('/register')) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+
+      // Role-based route protection
+      if (pathname.startsWith('/admin')) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single()
+
+          if (profile?.role !== 'admin') {
+              return NextResponse.redirect(new URL('/dashboard', request.url))
+          }
+      }
   }
+
 
   return response
 }

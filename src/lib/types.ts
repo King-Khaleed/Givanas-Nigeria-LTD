@@ -14,6 +14,7 @@ export type Database = {
           role: "admin" | "staff" | "client";
           organization_id: string | null;
           phone: string | null;
+          is_active: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -24,12 +25,14 @@ export type Database = {
           role: "admin" | "staff" | "client";
           organization_id?: string | null;
           phone?: string | null;
+          is_active?: boolean;
         };
         Update: {
           full_name?: string | null;
           role?: "admin" | "staff" | "client";
           organization_id?: string | null;
           phone?: string | null;
+          is_active?: boolean;
           updated_at?: string;
         };
       };

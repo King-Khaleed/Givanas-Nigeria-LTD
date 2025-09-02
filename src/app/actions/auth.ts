@@ -30,7 +30,7 @@ export async function login(values: z.infer<typeof loginSchema>) {
 
   const { email, password } = validatedFields.data;
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { error, data } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -38,8 +38,16 @@ export async function login(values: z.infer<typeof loginSchema>) {
   if (error) {
     return { error: error.message };
   }
+  
+  if (data.user) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
+    if (profile?.role === 'admin') {
+      return { success: true, redirectTo: '/admin' };
+    }
+  }
 
-  return { success: true };
+
+  return { success: true, redirectTo: '/dashboard' };
 }
 
 export async function signup(values: z.infer<typeof signupSchema>) {
@@ -53,7 +61,9 @@ export async function signup(values: z.infer<typeof signupSchema>) {
 
     const { email, password, fullName, organizationName, phone, role } = validatedFields.data;
     
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    // Note: The on_auth_user_created trigger now handles profile creation.
+    // We just need to pass the metadata.
+    const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -69,24 +79,6 @@ export async function signup(values: z.infer<typeof signupSchema>) {
 
     if (signUpError) {
         return { error: signUpError.message };
-    }
-
-    if(data.user) {
-        // The user is created in auth.users, but we need to create the profile in public.profiles
-        const { error: profileError } = await supabase.from('profiles').insert({
-            id: data.user.id,
-            email: data.user.email!,
-            full_name: fullName,
-            organization_name: organizationName,
-            phone: phone,
-            role: role,
-        })
-        if (profileError) {
-            // If profile creation fails, we should ideally delete the user from auth.users
-            // This requires admin privileges. For now, we'll just log the error.
-            console.error("Failed to create profile:", profileError.message);
-            return { error: `User created, but profile setup failed. ${profileError.message}` };
-        }
     }
 
     return { success: true };

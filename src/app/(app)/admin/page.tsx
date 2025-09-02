@@ -8,15 +8,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/server";
+import { formatDistanceToNow } from 'date-fns';
 
-export default function AdminDashboard() {
-  const recentActivities = [
-    { user: "Alice", action: "Uploaded 5 files", time: "2m ago", org: "Innovate Inc." },
-    { user: "Bob", action: "Generated a report", time: "15m ago", org: "Tech Solutions" },
-    { user: "Charlie", action: "Signed up", time: "1h ago", org: "New Ventures" },
-    { user: "Alice", action: "Resolved 2 high-risk flags", time: "3h ago", org: "Innovate Inc." },
-  ];
+export default async function AdminDashboard() {
+    const supabase = createClient();
+
+    const { count: orgCount } = await supabase.from('organizations').select('*', { count: 'exact', head: true });
+    const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+    const { count: reportCount } = await supabase.from('audit_reports').select('*', { count: 'exact', head: true });
+
+    const { data: recentActivities } = await supabase
+        .from('activities')
+        .select('*, user:profiles(full_name), organization:organizations(name)')
+        .order('created_at', { ascending: false })
+        .limit(5)
+
 
   return (
     <div className="space-y-8">
@@ -31,8 +38,8 @@ export default function AdminDashboard() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">+2 from last month</p>
+            <div className="text-2xl font-bold">{orgCount ?? 0}</div>
+            <p className="text-xs text-muted-foreground">All registered orgs</p>
           </CardContent>
         </Card>
         <Card>
@@ -41,8 +48,8 @@ export default function AdminDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">235</div>
-            <p className="text-xs text-muted-foreground">+10% from last month</p>
+            <div className="text-2xl font-bold">{userCount ?? 0}</div>
+             <p className="text-xs text-muted-foreground">All active & inactive users</p>
           </CardContent>
         </Card>
         <Card>
@@ -51,8 +58,8 @@ export default function AdminDashboard() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4,521</div>
-            <p className="text-xs text-muted-foreground">+500 this month</p>
+            <div className="text-2xl font-bold">{reportCount ?? 0}</div>
+            <p className="text-xs text-muted-foreground">Generated reports</p>
           </CardContent>
         </Card>
         <Card>
@@ -83,12 +90,12 @@ export default function AdminDashboard() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {recentActivities.map((activity, index) => (
-                         <TableRow key={index}>
-                            <TableCell className="font-medium">{activity.user}</TableCell>
-                            <TableCell>{activity.org}</TableCell>
+                    {recentActivities?.map((activity) => (
+                         <TableRow key={activity.id}>
+                            <TableCell className="font-medium">{activity.user?.full_name}</TableCell>
+                            <TableCell>{activity.organization?.name}</TableCell>
                             <TableCell>{activity.action}</TableCell>
-                            <TableCell className="text-right">{activity.time}</TableCell>
+                            <TableCell className="text-right">{formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

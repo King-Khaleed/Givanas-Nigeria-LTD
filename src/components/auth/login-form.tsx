@@ -61,7 +61,7 @@ export function LoginForm() {
         title: "Login Successful",
         description: "Welcome back!",
       });
-      router.push("/dashboard");
+      router.push(result.redirectTo || "/dashboard");
       router.refresh();
     }
     setIsLoading(false);

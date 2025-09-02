@@ -63,6 +63,11 @@ export function LoginForm() {
         title: "Login Successful",
         description: "Welcome back!",
       });
+      
+      if (result.redirectTo) {
+        router.push(result.redirectTo);
+      }
+      
       // This is crucial to re-fetch server state and trigger the layout to re-render
       router.refresh();
     }

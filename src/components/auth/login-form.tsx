@@ -57,15 +57,15 @@ export function LoginForm() {
         description: result.error,
         variant: "destructive",
       });
+      setIsLoading(false);
     } else {
       toast({
         title: "Login Successful",
         description: "Welcome back!",
       });
       router.push(result.redirectTo || "/dashboard");
-      router.refresh();
+      router.refresh(); // This is crucial to re-fetch server state
     }
-    setIsLoading(false);
   }
 
   return (

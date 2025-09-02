@@ -1,22 +1,35 @@
+
+'use client';
+
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MainHeader } from "@/components/main-header";
-import { createClient } from "@/lib/supabase/server";
+import { useAuth } from "@/hooks/use-auth-context";
 import { redirect } from "next/navigation";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
-export default async function AppLayout({
+
+export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, profile, loading } = useAuth();
 
-  if (!user) {
-    redirect('/login');
+  useEffect(() => {
+    if (!loading && !user) {
+      redirect('/login');
+    }
+  }, [user, loading]);
+
+  if (loading || !profile) {
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    )
   }
-  
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
 
   return (
     <SidebarProvider>

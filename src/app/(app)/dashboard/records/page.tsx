@@ -1,36 +1,48 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, Download, FileSearch } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
-import { format } from 'date-fns';
-import Link from "next/link";
-import { getDownloadUrl } from "@/app/actions/records";
+import { RecordsTable } from "./_components/records-table";
+import { RecordSearch } from "./_components/record-search";
 
-export default async function RecordsPage() {
+export default async function RecordsPage({
+  searchParams,
+}: {
+  searchParams?: { [key: string]: string | undefined };
+}) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
+
+    const page = searchParams?.page ? parseInt(searchParams.page, 10) : 1;
+    const limit = searchParams?.limit ? parseInt(searchParams.limit, 10) : 10;
+    const search = searchParams?.search || undefined;
     
     let records = [];
     let recordCount = 0;
 
     if (user) {
-        const { data, count } = await supabase
-            .from('financial_records')
-            .select('*', { count: 'exact' })
-            .order('created_at', { ascending: false });
-        records = data ?? [];
-        recordCount = count ?? 0;
+        const { data: profile } = await supabase.from('profiles').select('organization_id').single();
+        if (profile?.organization_id) {
+            let query = supabase
+                .from('financial_records')
+                .select('*', { count: 'exact' })
+                .eq('organization_id', profile.organization_id);
+
+            if (search) {
+                query = query.ilike('file_name', `%${search}%`);
+            }
+            
+            const { data, count, error } = await query
+                .range((page - 1) * limit, page * limit - 1)
+                .order('created_at', { ascending: false });
+
+            if (error) console.error(error);
+            
+            records = data ?? [];
+            recordCount = count ?? 0;
+        }
     }
+
+    const pageCount = Math.ceil(recordCount / limit);
 
   return (
     <div className="space-y-8">
@@ -46,47 +58,10 @@ export default async function RecordsPage() {
           <CardDescription>You have {recordCount} records in total.</CardDescription>
         </CardHeader>
         <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>File Name</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Upload Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Risk Level</TableHead>
-                        <TableHead>Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {records.map((record) => (
-                        <TableRow key={record.id}>
-                            <TableCell className="font-medium">{record.file_name}</TableCell>
-                            <TableCell>{record.file_type}</TableCell>
-                            <TableCell>{(record.file_size / 1024 / 1024).toFixed(2)} MB</TableCell>
-                            <TableCell>{format(new Date(record.created_at), 'PPP')}</TableCell>
-                            <TableCell><Badge variant={record.status === 'completed' ? 'default' : record.status === 'failed' ? 'destructive' : 'secondary'}>{record.status}</Badge></TableCell>
-                            <TableCell>
-                                <Badge variant={record.risk_level === 'high' ? 'destructive' : record.risk_level === 'medium' ? 'secondary' : 'outline'}>{record.risk_level ?? 'N/A'}</Badge>
-                            </TableCell>
-                            <TableCell className="flex gap-2">
-                                 <Button asChild variant="ghost" size="icon">
-                                    <Link href={`/dashboard/records/${record.id}`}>
-                                        <FileSearch className="h-4 w-4" />
-                                    </Link>
-                                </Button>
-                                <form action={getDownloadUrl}>
-                                    <input type="hidden" name="path" value={record.file_path} />
-                                    <Button type="submit" variant="ghost" size="icon">
-                                        <Download className="h-4 w-4" />
-                                    </Button>
-                                </form>
-                                <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+            <div className="flex justify-between items-center py-4">
+                <RecordSearch initialSearch={search} />
+            </div>
+            <RecordsTable records={records} pageCount={pageCount} />
         </CardContent>
       </Card>
     </div>

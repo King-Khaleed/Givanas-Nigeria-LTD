@@ -7,9 +7,6 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
-  getPaginationRowModel,
-  ColumnFiltersState,
-  getFilteredRowModel,
 } from "@tanstack/react-table"
 import {
   Table,
@@ -23,7 +20,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Profile } from "@/lib/types"
 import { format } from 'date-fns'
-import { MoreHorizontal, ArrowUpDown } from "lucide-react"
+import { MoreHorizontal } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { updateUserRole, toggleUserActive } from "../actions";
 import { useToast } from "@/hooks/use-toast"
 
@@ -42,7 +39,9 @@ type UserWithOrg = Profile & { organization: { name: string } | null };
 export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCount: number }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { toast } = useToast();
+  const currentPage = Number(searchParams.get('page')) || 1;
 
   const handleRoleChange = async (userId: string, role: 'admin' | 'staff' | 'client') => {
     try {
@@ -156,24 +155,25 @@ export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCou
   ]
 
   const [rowSelection, setRowSelection] = React.useState({})
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-
 
   const table = useReactTable({
     data: users,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     onRowSelectionChange: setRowSelection,
-     onColumnFiltersChange: setColumnFilters,
-    getFilteredRowModel: getFilteredRowModel(),
     state: {
       rowSelection,
-      columnFilters,
     },
     pageCount,
     manualPagination: true,
-  })
+  });
+
+  const handlePagination = (page: number) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('page', page.toString());
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
 
   return (
     <div className="w-full">
@@ -221,27 +221,30 @@ export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCou
           </TableBody>
         </Table>
       </div>
-       <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
-      </div>
-       <div className="flex-1 text-sm text-muted-foreground">
-        {table.getFilteredSelectedRowModel().rows.length} of{" "}
-        {table.getFilteredRowModel().rows.length} row(s) selected.
+       <div className="flex items-center justify-between py-4">
+         <div className="flex-1 text-sm text-muted-foreground">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {table.getFilteredRowModel().rows.length} row(s) selected.
+        </div>
+        <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePagination(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              Previous
+            </Button>
+            <span className="text-sm">Page {currentPage} of {pageCount}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePagination(currentPage + 1)}
+              disabled={currentPage >= pageCount}
+            >
+              Next
+            </Button>
+        </div>
       </div>
     </div>
   )

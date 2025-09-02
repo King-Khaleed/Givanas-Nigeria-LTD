@@ -3,16 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { UsersTable } from "./_components/users-table";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { UserSearch } from "./_components/user-search";
 
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams?: { [key: string]: string | undefined };
 }) {
   const supabase = createClient();
-  const page = typeof searchParams?.page === 'string' ? Number(searchParams.page) : 1;
-  const limit = typeof searchParams?.limit === 'string' ? Number(searchParams.limit) : 10;
-  const search = typeof searchParams?.search === 'string' ? searchParams.search : undefined;
+  const page = searchParams?.page ? parseInt(searchParams.page, 10) : 1;
+  const limit = searchParams?.limit ? parseInt(searchParams.limit, 10) : 10;
+  const search = searchParams?.search || undefined;
 
   let query = supabase
     .from('profiles')
@@ -42,16 +43,9 @@ export default async function UsersPage({
         </p>
       </div>
 
-       <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search users by name or email..."
-            className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
-            defaultValue={search}
-            // onChange handler would require client component and state management
-          />
-        </div>
+       <div className="flex justify-between items-center">
+        <UserSearch initialSearch={search} />
+      </div>
 
       <UsersTable
         users={users ?? []}

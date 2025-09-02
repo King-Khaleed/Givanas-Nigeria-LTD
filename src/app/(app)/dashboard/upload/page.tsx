@@ -7,28 +7,21 @@ import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/compo
 import {Button} from '@/components/ui/button';
 import {useToast} from '@/hooks/use-toast';
 import {createClient} from '@/lib/supabase/client';
-import {Loader2, UploadCloud, File as FileIcon, CheckCircle, AlertCircle} from 'lucide-react';
+import {Loader2, UploadCloud, File as FileIcon, CheckCircle, AlertCircle, X} from 'lucide-react';
 import {Progress} from '@/components/ui/progress';
 import {useRouter} from 'next/navigation';
-import {createFinancialRecord, getSignedUrl} from '@/app/actions/records';
+import {createFinancialRecord, getSignedUrl, runComplianceCheck} from '@/app/actions/records';
 import {v4 as uuidv4} from 'uuid';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const ALLOWED_FILE_TYPES = [
-  'application/pdf',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/csv',
-  'image/jpeg',
-  'image/png',
-];
 
 type UploadableFile = {
   id: string;
   file: File;
   progress: number;
-  status: 'pending' | 'uploading' | 'success' | 'error';
+  status: 'pending' | 'uploading' | 'analyzing' | 'success' | 'error';
   error?: string;
+  recordId?: string;
 };
 
 export default function UploadPage() {
@@ -76,7 +69,7 @@ export default function UploadPage() {
   });
 
   const handleUpload = async () => {
-    if (files.some(f => f.status === 'uploading')) return;
+    if (files.some(f => f.status === 'uploading' || f.status === 'analyzing')) return;
 
     setIsUploading(true);
 
@@ -97,20 +90,24 @@ export default function UploadPage() {
     const uploadPromises = files
       .filter(f => f.status === 'pending')
       .map(async uploadableFile => {
-        setFiles(prev =>
-          prev.map(f =>
-            f.id === uploadableFile.id ? {...f, status: 'uploading'} : f
-          )
-        );
         try {
+          // 1. Set status to uploading
+          setFiles(prev =>
+            prev.map(f =>
+              f.id === uploadableFile.id ? {...f, status: 'uploading'} : f
+            )
+          );
+        
           const {file} = uploadableFile;
           
+          // 2. Get signed URL
           const {url, path} = await getSignedUrl({
             fileType: file.type,
             fileSize: file.size,
             organizationId: profile.organization_id!,
           });
           
+          // 3. Upload file to Supabase storage
           const {error: uploadError} = await supabase.storage
             .from('financial-records')
             .uploadToSignedUrl(path, url.token, file, {
@@ -125,9 +122,10 @@ export default function UploadPage() {
                }
             });
 
-          if (uploadError) throw new Error(uploadError.message);
+          if (uploadError) throw new Error(`Upload Error: ${uploadError.message}`);
 
-          await createFinancialRecord({
+          // 4. Create record in database
+          const record = await createFinancialRecord({
             organization_id: profile.organization_id!,
             file_name: file.name,
             file_path: path,
@@ -135,6 +133,17 @@ export default function UploadPage() {
             file_size: file.size,
           });
 
+          // 5. Set status to analyzing
+          setFiles(prev =>
+            prev.map(f =>
+              f.id === uploadableFile.id ? {...f, status: 'analyzing', recordId: record.id} : f
+            )
+          );
+
+          // 6. Trigger AI analysis
+          await runComplianceCheck({recordId: record.id, filePath: record.file_path, fileType: record.file_type});
+
+          // 7. Set status to success
           setFiles(prev =>
             prev.map(f =>
               f.id === uploadableFile.id
@@ -157,7 +166,7 @@ export default function UploadPage() {
     setIsUploading(false);
     toast({
         title: "Uploads Complete",
-        description: "Successfully processed all pending files.",
+        description: "Successfully processed all pending files. Analysis is running.",
     })
     router.push('/dashboard/records');
     router.refresh();
@@ -217,8 +226,13 @@ export default function UploadPage() {
                       </div>
                     </div>
                     <div className="w-1/3 mx-4">
-                      {uploadableFile.status === 'uploading' && (
+                      {(uploadableFile.status === 'uploading' || uploadableFile.status === 'analyzing') && (
                          <Progress value={uploadableFile.progress} />
+                      )}
+                      {uploadableFile.status === 'analyzing' && (
+                           <div className="flex items-center text-sm text-muted-foreground mt-1">
+                             <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analyzing...
+                          </div>
                       )}
                       {uploadableFile.status === 'success' && (
                           <div className="flex items-center text-green-600">

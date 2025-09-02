@@ -61,6 +61,7 @@ export type Database = {
           file_size: number;
           status: "pending" | "processing" | "completed" | "failed";
           risk_level: "low" | "medium" | "high" | null;
+          analysis_results: Json | null;
           created_at: string;
         };
         Insert: {
@@ -72,10 +73,12 @@ export type Database = {
           file_type: string;
           file_size: number;
           status?: "pending" | "processing" | "completed" | "failed";
+          analysis_results?: Json | null;
         };
         Update: {
           status?: "pending" | "processing" | "completed" | "failed";
           risk_level?: "low" | "medium" | "high" | null;
+          analysis_results?: Json | null;
         };
       };
       audit_reports: {

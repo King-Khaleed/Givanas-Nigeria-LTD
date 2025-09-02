@@ -7,8 +7,11 @@ import {redirect} from 'next/navigation';
 import {z} from 'zod';
 import {v4 as uuidv4} from 'uuid';
 import type { Database } from '@/lib/types';
+import { automatedComplianceChecks } from '@/ai/flows/automated-compliance-checks';
+import { Buffer } from 'buffer';
 
 type FinancialRecordInsert = Database["public"]["Tables"]["financial_records"]["Insert"];
+type FinancialRecord = Database["public"]["Tables"]["financial_records"]["Row"];
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_FILE_TYPES = [
@@ -61,7 +64,7 @@ export async function getSignedUrl(values: z.infer<typeof signedUrlSchema>) {
 }
 
 
-export async function createFinancialRecord(values: FinancialRecordInsert) {
+export async function createFinancialRecord(values: FinancialRecordInsert): Promise<FinancialRecord> {
     const supabase = createClient();
      const {
         data: {user},
@@ -76,7 +79,7 @@ export async function createFinancialRecord(values: FinancialRecordInsert) {
         uploaded_by: user.id
     };
 
-    const {error} = await supabase.from('financial_records').insert(recordData);
+    const {data, error} = await supabase.from('financial_records').insert(recordData).select().single();
 
     if (error) {
         throw new Error(`Database Error: ${error.message}`);
@@ -84,6 +87,7 @@ export async function createFinancialRecord(values: FinancialRecordInsert) {
     
     revalidatePath('/dashboard/records');
     revalidatePath('/dashboard');
+    return data;
 }
 
 export async function getDownloadUrl(formData: FormData) {
@@ -101,3 +105,49 @@ export async function getDownloadUrl(formData: FormData) {
     redirect(data.signedUrl);
 }
 
+const complianceCheckSchema = z.object({
+    recordId: z.string(),
+    filePath: z.string(),
+    fileType: z.string(),
+});
+
+
+export async function runComplianceCheck(values: z.infer<typeof complianceCheckSchema>) {
+    const supabase = createClient();
+    const { recordId, filePath, fileType } = values;
+
+    try {
+        // 1. Update record status to 'processing'
+        await supabase.from('financial_records').update({ status: 'processing' }).eq('id', recordId);
+        revalidatePath('/dashboard/records');
+
+        // 2. Download file from storage
+        const { data: fileData, error: downloadError } = await supabase.storage.from('financial-records').download(filePath);
+        if (downloadError) throw new Error(`Failed to download file: ${downloadError.message}`);
+
+        // 3. Convert file to base64 data URI
+        const buffer = Buffer.from(await fileData.arrayBuffer());
+        const dataUri = `data:${fileType};base64,${buffer.toString('base64')}`;
+        
+        // 4. Run Genkit AI flow
+        const analysisResult = await automatedComplianceChecks({
+            financialDocumentDataUri: dataUri,
+        });
+
+        // 5. Update record with analysis results
+        await supabase.from('financial_records').update({
+            status: 'completed',
+            risk_level: analysisResult.riskLevel,
+            analysis_results: analysisResult as any, // Cast to any to store as JSONB
+        }).eq('id', recordId);
+
+    } catch (error: any) {
+        // 6. Handle errors
+        await supabase.from('financial_records').update({ status: 'failed' }).eq('id', recordId);
+        console.error(`Analysis failed for record ${recordId}:`, error);
+    } finally {
+        // 7. Revalidate paths
+        revalidatePath('/dashboard/records');
+        revalidatePath(`/dashboard/records/${recordId}`);
+    }
+}

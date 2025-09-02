@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, Download } from "lucide-react";
+import { MoreHorizontal, Download, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { format } from 'date-fns';
@@ -67,10 +67,14 @@ export default async function RecordsPage() {
                             <TableCell>{format(new Date(record.created_at), 'PPP')}</TableCell>
                             <TableCell><Badge variant={record.status === 'completed' ? 'default' : record.status === 'failed' ? 'destructive' : 'secondary'}>{record.status}</Badge></TableCell>
                             <TableCell>
-                                {/* @ts-ignore */}
                                 <Badge variant={record.risk_level === 'high' ? 'destructive' : record.risk_level === 'medium' ? 'secondary' : 'outline'}>{record.risk_level ?? 'N/A'}</Badge>
                             </TableCell>
                             <TableCell className="flex gap-2">
+                                 <Button asChild variant="ghost" size="icon">
+                                    <Link href={`/dashboard/records/${record.id}`}>
+                                        <FileSearch className="h-4 w-4" />
+                                    </Link>
+                                </Button>
                                 <form action={getDownloadUrl}>
                                     <input type="hidden" name="path" value={record.file_path} />
                                     <Button type="submit" variant="ghost" size="icon">

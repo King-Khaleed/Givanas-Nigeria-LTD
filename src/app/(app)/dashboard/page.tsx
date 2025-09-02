@@ -1,0 +1,138 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { UploadCloud, FileCheck2, AlertTriangle, FileText } from "lucide-react";
+import Link from "next/link";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge";
+
+export default function Dashboard() {
+    const recentUploads = [
+        { name: "Q1_report.pdf", status: "Completed", risk: "Low" },
+        { name: "March_invoices.csv", status: "Processing", risk: "N/A" },
+        { name: "Receipt_482.jpg", status: "Completed", risk: "High" },
+    ];
+
+    const recentReports = [
+        { title: "Q1 Financial Summary", date: "2024-04-05" },
+        { title: "March Expense Analysis", date: "2024-04-02" },
+    ]
+
+  return (
+    <div className="space-y-8">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight font-headline">Welcome Back!</h1>
+            <p className="text-muted-foreground">Here&apos;s a summary of your financial audit activities.</p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Files Processed</CardTitle>
+                    <FileCheck2 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">1,257</div>
+                    <p className="text-xs text-muted-foreground">+15% from last month</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">High-Risk Flags</CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">42</div>
+                    <p className="text-xs text-muted-foreground">3 new flags today</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Reports Generated</CardTitle>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">89</div>
+                    <p className="text-xs text-muted-foreground">5 this week</p>
+                </CardContent>
+            </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Upload Records</CardTitle>
+                    <CardDescription>Drag and drop files or browse to upload for analysis.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg min-h-[200px] text-center">
+                    <UploadCloud className="w-10 h-10 text-muted-foreground" />
+                    <p className="mt-4 text-muted-foreground">Supported formats: PDF, Excel, CSV</p>
+                    <Button asChild className="mt-4">
+                        <Link href="/dashboard/upload">Browse Files</Link>
+                    </Button>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Recent Analysis</CardTitle>
+                    <CardDescription>Status of your most recent file uploads.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>File Name</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Risk</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {recentUploads.map((upload) => (
+                                <TableRow key={upload.name}>
+                                    <TableCell className="font-medium">{upload.name}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={upload.status === 'Completed' ? 'default' : 'secondary'}>{upload.status}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={upload.risk === 'High' ? 'destructive' : 'outline'}>{upload.risk}</Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </div>
+        
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Recent Reports</CardTitle>
+                    <CardDescription>Your latest generated audit reports.</CardDescription>
+                </div>
+                <Button asChild>
+                    <Link href="/dashboard/reports">Generate New Report</Link>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                <ul className="space-y-4">
+                    {recentReports.map(report => (
+                        <li key={report.title} className="flex items-center justify-between p-3 bg-secondary rounded-md">
+                            <div>
+                                <p className="font-medium">{report.title}</p>
+                                <p className="text-sm text-muted-foreground">Generated on {report.date}</p>
+                            </div>
+                            <Button variant="outline" size="sm">Download</Button>
+                        </li>
+                    ))}
+                </ul>
+            </CardContent>
+        </Card>
+    </div>
+  );
+}

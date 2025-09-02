@@ -87,8 +87,11 @@ export type Database = {
           organization_id: string;
           generated_by: string;
           title: string;
+          summary: string | null;
+          key_metrics: string | null;
+          top_risk_areas: string | null;
           recommendations: string | null;
-          status: "draft" | "final";
+          status: "draft" | "final" | "failed";
           created_at: string;
         };
         Insert: {
@@ -96,13 +99,19 @@ export type Database = {
           organization_id: string;
           generated_by: string;
           title: string;
+          summary?: string | null;
+          key_metrics?: string | null;
+          top_risk_areas?: string | null;
           recommendations?: string | null;
-          status?: "draft" | "final";
+          status?: "draft" | "final" | "failed";
         };
         Update: {
           title?: string;
+          summary?: string | null;
+          key_metrics?: string | null;
+          top_risk_areas?: string | null;
           recommendations?: string | null;
-          status?: "draft" | "final";
+          status?: "draft" | "final" | "failed";
         };
       };
       activities: {
@@ -133,7 +142,7 @@ export type Database = {
     Enums: {
       role: "admin" | "staff" | "client";
       file_status: "pending" | "processing" | "completed" | "failed";
-      report_status: "draft" | "final";
+      report_status: "draft" | "final" | "failed";
     };
     CompositeTypes: {
       [_ in never]: never;

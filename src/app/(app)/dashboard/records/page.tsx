@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -8,17 +9,29 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/server";
+import { format } from 'date-fns';
+import Link from "next/link";
+import { getDownloadUrl } from "@/app/actions/records";
 
-export default function RecordsPage() {
-    const records = [
-        { name: "Q1_report.pdf", type: "PDF", size: "2.3 MB", date: "2024-04-10", status: "Completed", risk: "Low" },
-        { name: "March_invoices.csv", type: "CSV", size: "1.1 MB", date: "2024-04-09", status: "Processing", risk: "N/A" },
-        { name: "Receipt_482.jpg", type: "Image", size: "450 KB", date: "2024-04-08", status: "Completed", risk: "High" },
-        { name: "Vendor_payments.xlsx", type: "Excel", size: "800 KB", date: "2024-04-05", status: "Completed", risk: "Medium" },
-        { name: "Statement_Feb.pdf", type: "PDF", size: "1.5 MB", date: "2024-03-15", status: "Failed", risk: "Error" },
-    ];
+export default async function RecordsPage() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    let records = [];
+    let recordCount = 0;
+
+    if (user) {
+        const { data, count } = await supabase
+            .from('financial_records')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false });
+        records = data ?? [];
+        recordCount = count ?? 0;
+    }
+
   return (
     <div className="space-y-8">
       <div>
@@ -30,7 +43,7 @@ export default function RecordsPage() {
       <Card>
         <CardHeader>
           <CardTitle>All Records</CardTitle>
-          <CardDescription>You have {records.length} records in total.</CardDescription>
+          <CardDescription>You have {recordCount} records in total.</CardDescription>
         </CardHeader>
         <CardContent>
             <Table>
@@ -42,19 +55,28 @@ export default function RecordsPage() {
                         <TableHead>Upload Date</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Risk Level</TableHead>
-                        <TableHead><span className="sr-only">Actions</span></TableHead>
+                        <TableHead>Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {records.map((record) => (
-                        <TableRow key={record.name}>
-                            <TableCell className="font-medium">{record.name}</TableCell>
-                            <TableCell>{record.type}</TableCell>
-                            <TableCell>{record.size}</TableCell>
-                            <TableCell>{record.date}</TableCell>
-                            <TableCell><Badge>{record.status}</Badge></TableCell>
-                            <TableCell><Badge variant={record.risk === 'High' ? 'destructive' : record.risk === 'Medium' ? 'secondary' : 'outline'}>{record.risk}</Badge></TableCell>
+                        <TableRow key={record.id}>
+                            <TableCell className="font-medium">{record.file_name}</TableCell>
+                            <TableCell>{record.file_type}</TableCell>
+                            <TableCell>{(record.file_size / 1024 / 1024).toFixed(2)} MB</TableCell>
+                            <TableCell>{format(new Date(record.created_at), 'PPP')}</TableCell>
+                            <TableCell><Badge variant={record.status === 'completed' ? 'default' : record.status === 'failed' ? 'destructive' : 'secondary'}>{record.status}</Badge></TableCell>
                             <TableCell>
+                                {/* @ts-ignore */}
+                                <Badge variant={record.risk_level === 'high' ? 'destructive' : record.risk_level === 'medium' ? 'secondary' : 'outline'}>{record.risk_level ?? 'N/A'}</Badge>
+                            </TableCell>
+                            <TableCell className="flex gap-2">
+                                <form action={getDownloadUrl}>
+                                    <input type="hidden" name="path" value={record.file_path} />
+                                    <Button type="submit" variant="ghost" size="icon">
+                                        <Download className="h-4 w-4" />
+                                    </Button>
+                                </form>
                                 <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                             </TableCell>
                         </TableRow>

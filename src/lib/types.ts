@@ -1,3 +1,4 @@
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
@@ -11,7 +12,7 @@ export type Database = {
           email: string;
           full_name: string | null;
           role: "admin" | "staff" | "client";
-          organization_name: string | null;
+          organization_id: string | null;
           phone: string | null;
           created_at: string;
           updated_at: string;
@@ -21,13 +22,13 @@ export type Database = {
           email: string;
           full_name?: string | null;
           role: "admin" | "staff" | "client";
-          organization_name?: string | null;
+          organization_id?: string | null;
           phone?: string | null;
         };
         Update: {
           full_name?: string | null;
           role?: "admin" | "staff" | "client";
-          organization_name?: string | null;
+          organization_id?: string | null;
           phone?: string | null;
           updated_at?: string;
         };
@@ -36,22 +37,14 @@ export type Database = {
         Row: {
           id: string;
           name: string;
-          description: string | null;
-          industry: string | null;
-          admin_id: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
-          description?: string | null;
-          industry?: string | null;
-          admin_id: string;
         };
         Update: {
           name?: string;
-          description?: string | null;
-          industry?: string | null;
         };
       };
       financial_records: {
@@ -64,8 +57,7 @@ export type Database = {
           file_type: string;
           file_size: number;
           status: "pending" | "processing" | "completed" | "failed";
-          analysis_results: Json | null;
-          risk_flags: Json | null;
+          risk_level: "low" | "medium" | "high" | null;
           created_at: string;
         };
         Insert: {
@@ -77,13 +69,10 @@ export type Database = {
           file_type: string;
           file_size: number;
           status?: "pending" | "processing" | "completed" | "failed";
-          analysis_results?: Json | null;
-          risk_flags?: Json | null;
         };
         Update: {
           status?: "pending" | "processing" | "completed" | "failed";
-          analysis_results?: Json | null;
-          risk_flags?: Json | null;
+          risk_level?: "low" | "medium" | "high" | null;
         };
       };
       audit_reports: {
@@ -92,7 +81,6 @@ export type Database = {
           organization_id: string;
           generated_by: string;
           title: string;
-          report_data: Json;
           recommendations: string | null;
           status: "draft" | "final";
           created_at: string;
@@ -102,13 +90,11 @@ export type Database = {
           organization_id: string;
           generated_by: string;
           title: string;
-          report_data: Json;
           recommendations?: string | null;
           status?: "draft" | "final";
         };
         Update: {
           title?: string;
-          report_data?: Json;
           recommendations?: string | null;
           status?: "draft" | "final";
         };

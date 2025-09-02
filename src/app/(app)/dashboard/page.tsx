@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadCloud, FileCheck2, AlertTriangle, FileText } from "lucide-react";
@@ -11,13 +12,37 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/lib/supabase/server";
 
-export default function Dashboard() {
-    const recentUploads = [
-        { name: "Q1_report.pdf", status: "Completed", risk: "Low" },
-        { name: "March_invoices.csv", status: "Processing", risk: "N/A" },
-        { name: "Receipt_482.jpg", status: "Completed", risk: "High" },
-    ];
+export default async function Dashboard() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    let recentUploads = [];
+    let fileStats = { total: 0, highRisk: 0 };
+    
+    if (user) {
+        const { data: uploads } = await supabase
+            .from('financial_records')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(3);
+        recentUploads = uploads ?? [];
+
+        const { count: totalCount } = await supabase
+            .from('financial_records')
+            .select('*', { count: 'exact', head: true });
+        
+        // @ts-ignore
+        const { count: highRiskCount } = await supabase
+            .from('financial_records')
+            .select('*', { count: 'exact', head: true })
+            .eq('risk_level', 'high');
+            
+        fileStats.total = totalCount ?? 0;
+        fileStats.highRisk = highRiskCount ?? 0;
+    }
+
 
     const recentReports = [
         { title: "Q1 Financial Summary", date: "2024-04-05" },
@@ -37,8 +62,8 @@ export default function Dashboard() {
                     <FileCheck2 className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">1,257</div>
-                    <p className="text-xs text-muted-foreground">+15% from last month</p>
+                    <div className="text-2xl font-bold">{fileStats.total}</div>
+                    <p className="text-xs text-muted-foreground">Total files uploaded</p>
                 </CardContent>
             </Card>
             <Card>
@@ -47,7 +72,7 @@ export default function Dashboard() {
                     <AlertTriangle className="h-4 w-4 text-destructive" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">42</div>
+                    <div className="text-2xl font-bold">{fileStats.highRisk}</div>
                     <p className="text-xs text-muted-foreground">3 new flags today</p>
                 </CardContent>
             </Card>
@@ -70,11 +95,13 @@ export default function Dashboard() {
                     <CardDescription>Drag and drop files or browse to upload for analysis.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg min-h-[200px] text-center">
-                    <UploadCloud className="w-10 h-10 text-muted-foreground" />
-                    <p className="mt-4 text-muted-foreground">Supported formats: PDF, Excel, CSV</p>
-                    <Button asChild className="mt-4">
-                        <Link href="/dashboard/upload">Browse Files</Link>
-                    </Button>
+                     <Link href="/dashboard/upload" className="flex flex-col items-center w-full">
+                        <UploadCloud className="w-10 h-10 text-muted-foreground" />
+                        <p className="mt-4 text-muted-foreground">Supported formats: PDF, Excel, CSV</p>
+                        <Button asChild variant="link" className="mt-4">
+                            <span>Browse Files</span>
+                        </Button>
+                    </Link>
                 </CardContent>
             </Card>
             <Card>
@@ -93,13 +120,14 @@ export default function Dashboard() {
                         </TableHeader>
                         <TableBody>
                             {recentUploads.map((upload) => (
-                                <TableRow key={upload.name}>
-                                    <TableCell className="font-medium">{upload.name}</TableCell>
+                                <TableRow key={upload.id}>
+                                    <TableCell className="font-medium">{upload.file_name}</TableCell>
                                     <TableCell>
-                                        <Badge variant={upload.status === 'Completed' ? 'default' : 'secondary'}>{upload.status}</Badge>
+                                        <Badge variant={upload.status === 'completed' ? 'default' : 'secondary'}>{upload.status}</Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={upload.risk === 'High' ? 'destructive' : 'outline'}>{upload.risk}</Badge>
+                                         {/* @ts-ignore */}
+                                        <Badge variant={upload.risk_level === 'high' ? 'destructive' : 'outline'}>{upload.risk_level ?? 'N/A'}</Badge>
                                     </TableCell>
                                 </TableRow>
                             ))}

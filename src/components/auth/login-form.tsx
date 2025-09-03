@@ -80,10 +80,10 @@ export function LoginForm() {
         router.push("/admin");
         break;
       case "staff":
-        router.push("/dashboard/staff");
+        router.push("/dashboard");
         break;
       case "client":
-        router.push("/dashboard/client");
+        router.push("/dashboard");
         break;
       default:
         router.push("/dashboard");

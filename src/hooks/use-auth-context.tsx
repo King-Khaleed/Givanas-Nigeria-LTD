@@ -89,12 +89,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [getProfile, refreshSession]);
   
   const waitForSession = useCallback(async (timeoutMs = 5000) => {
-    if (session) return true;
-    
     return new Promise<boolean>((resolve) => {
+        const check = () => {
+            if (session !== null) return true;
+            if (supabase.auth.getSession()) return true;
+            return false;
+        }
+
+        if (check()) {
+            return resolve(true);
+        }
+
         const startTime = Date.now();
         const interval = setInterval(() => {
-            if (supabase.auth.getSession()) {
+            if (check()) {
                 clearInterval(interval);
                 resolve(true);
             } else if (Date.now() - startTime > timeoutMs) {

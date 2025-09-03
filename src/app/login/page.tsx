@@ -28,7 +28,7 @@ export default function LoginPage() {
             <div className="flex flex-col items-center text-center">
                 <Link href="/" className="flex items-center justify-center mb-6">
                     <ShieldCheck className="h-8 w-8 text-primary" />
-                    <span className="ml-2 text-3xl font-bold font-headline">AuditWise</span>
+                    <span className="ml-2 text-3xl font-bold font-headline">Givanas Nigeria LTD</span>
                 </Link>
                 <h1 className="text-2xl font-bold tracking-tight">
                     Welcome Back

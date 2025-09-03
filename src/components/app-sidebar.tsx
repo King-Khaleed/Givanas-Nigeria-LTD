@@ -58,7 +58,7 @@ export function AppSidebar({ profile }: AppSidebarProps) {
       <SidebarHeader>
         <div className="flex items-center gap-2 p-2">
           <ShieldCheck className="h-6 w-6 text-primary" />
-          <span className="text-xl font-bold font-headline">AuditWise</span>
+          <span className="text-xl font-bold font-headline">Givanas Nigeria LTD</span>
         </div>
       </SidebarHeader>
       <SidebarContent className="p-0">

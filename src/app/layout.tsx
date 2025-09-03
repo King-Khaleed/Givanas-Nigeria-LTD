@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { AuthProvider } from '@/hooks/use-auth-context';
 
 export const metadata: Metadata = {
-  title: 'AuditWise',
+  title: 'Givanas Nigeria LTD',
   description: 'Professional Financial Audit Platform',
 };
 

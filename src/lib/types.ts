@@ -1,5 +1,6 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { GenerateExecutiveSummaryOutput } from "@/ai/flows/generate-executive-summary";
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
@@ -161,5 +162,5 @@ export type Json =
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type FinancialRecord = Database["public"]["Tables"]["financial_records"]["Row"];
 export type Organization = Database["public"]["Tables"]["organizations"]["Row"];
-export type AuditReport = Database["public"]["Tables"]["audit_reports"]["Row"];
+export type AuditReport = Database["public"]["Tables"]["audit_reports"]["Row"] & { generated_by_user?: Pick<Profile, 'full_name'> | null };
 export type Activity = Database["public"]["Tables"]["activities"]["Row"];

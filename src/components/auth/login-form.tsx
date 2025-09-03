@@ -20,6 +20,8 @@ import { useState, useTransition } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth-context";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -35,6 +37,9 @@ export function LoginForm() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
+  const auth = useAuth();
+  const router = useRouter();
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,18 +54,30 @@ export function LoginForm() {
     startTransition(async () => {
       const result = await login(values);
 
-      if (result?.error) {
+      if (!result.success) {
         toast({
           title: "Login Failed",
           description: result.error,
           variant: "destructive",
         });
-      } else {
-         toast({
+        return;
+      }
+      
+      toast({
           title: "Login Successful",
           description: "Redirecting to your dashboard...",
-        });
-        // The redirect is now handled by the server action, so no client-side navigation is needed.
+      });
+
+      // The onAuthStateChange listener in AuthProvider will handle the session update.
+      // We just need to navigate to the correct page.
+      if (result.role === "admin") {
+        router.push("/admin");
+      } else if (result.role === 'staff') {
+        router.push("/dashboard/staff");
+      } else if (result.role === 'client') {
+        router.push("/dashboard/client");
+      } else {
+        router.push("/dashboard");
       }
     });
   }

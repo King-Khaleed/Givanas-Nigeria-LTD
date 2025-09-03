@@ -5,7 +5,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MainHeader } from "@/components/main-header";
 import { useAuth } from "@/hooks/use-auth-context";
-import { redirect, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -16,39 +16,46 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const { user, profile, loading } = useAuth();
+  const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
-      redirect('/login');
+    if (loading) return; // Do nothing while loading
+
+    if (!user) {
+      router.push('/login');
+      return;
     }
 
-    if (!loading && user && profile) {
-        // This logic handles cases where a logged-in user with a specific role
-        // tries to access a dashboard they shouldn't. It will redirect them
-        // to their correct dashboard.
-        const isAdmin = profile.role === 'admin';
-        const isStaff = profile.role === 'staff';
-        const isClient = profile.role === 'client';
+    const isAdmin = profile?.role === 'admin';
+    const isStaff = profile?.role === 'staff';
+    const isClient = profile?.role === 'client';
 
-        if (pathname.startsWith('/admin') && !isAdmin) {
-            redirect('/dashboard');
-        }
-        if (pathname.startsWith('/dashboard/staff') && !isStaff) {
-            redirect('/dashboard');
-        }
-        if (pathname.startsWith('/dashboard/client') && !isClient) {
-            redirect('/dashboard');
-        }
-        
-        // Redirect from generic dashboard to role-specific one
-        if (pathname === '/dashboard') {
-            if (isAdmin) redirect('/admin');
-            if (isStaff) redirect('/dashboard/staff');
-            if (isClient) redirect('/dashboard/client');
-        }
+    const isViewingAdminArea = pathname.startsWith('/admin');
+    const isViewingStaffArea = pathname.startsWith('/dashboard/staff');
+    const isViewingClientArea = pathname.startsWith('/dashboard/client');
+
+    // This logic handles cases where a logged-in user with a specific role
+    // tries to access a dashboard they shouldn't. It will redirect them
+    // to their correct dashboard.
+    if (isViewingAdminArea && !isAdmin) {
+        router.push('/dashboard');
     }
-  }, [user, profile, loading, pathname]);
+    if (isViewingStaffArea && !isStaff) {
+        router.push('/dashboard');
+    }
+    if (isViewingClientArea && !isClient) {
+        router.push('/dashboard');
+    }
+    
+    // Redirect from generic dashboard to role-specific one
+    if (pathname === '/dashboard') {
+        if (isAdmin) router.push('/admin');
+        if (isStaff) router.push('/dashboard/staff');
+        if (isClient) router.push('/dashboard/client');
+    }
+    
+  }, [user, profile, loading, pathname, router]);
 
   if (loading || !profile) {
     return (

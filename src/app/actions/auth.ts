@@ -26,7 +26,7 @@ export async function login(values: z.infer<typeof loginSchema>) {
   const validatedFields = loginSchema.safeParse(values);
 
   if (!validatedFields.success) {
-    return { error: "Invalid fields!" };
+    return { success: false, error: "Invalid fields!" };
   }
 
   const { email, password } = validatedFields.data;
@@ -37,7 +37,7 @@ export async function login(values: z.infer<typeof loginSchema>) {
   });
 
   if (error) {
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
   
   if (data.user) {
@@ -51,21 +51,10 @@ export async function login(values: z.infer<typeof loginSchema>) {
         });
     }
 
-    let redirectTo = '/dashboard';
-    if (profile?.role === 'admin') {
-      redirectTo = '/admin';
-    }
-     if (profile?.role === 'staff') {
-      redirectTo = '/dashboard/staff';
-    }
-     if (profile?.role === 'client') {
-      redirectTo = '/dashboard/client';
-    }
-    redirect(redirectTo);
+    return { success: true, role: profile?.role ?? 'client' };
   }
 
-  // Fallback redirect, though it should ideally not be reached if login is successful.
-  redirect('/dashboard');
+  return { success: true, role: 'client' };
 }
 
 export async function signup(values: z.infer<typeof signupSchema>) {
@@ -111,5 +100,5 @@ export async function signup(values: z.infer<typeof signupSchema>) {
 export async function logout() {
   const supabase = createClient();
   await supabase.auth.signOut();
-  redirect("/login");
+  return { success: true };
 }

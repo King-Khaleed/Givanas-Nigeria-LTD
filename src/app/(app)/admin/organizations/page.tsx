@@ -4,8 +4,6 @@ import {
   CheckCircle,
   DollarSign,
   FileText,
-  PlusCircle,
-  Filter,
   ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,34 +19,46 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { OrganizationsTable } from "./_components/organizations-table";
 import { AddOrganizationButton } from "./_components/add-organization-button";
+import { createClient } from "@/lib/supabase/server";
 
-const statsCards = [
-  { title: "Total Organizations", value: "89", change: "+7 this month", icon: Building },
-  { title: "Active Organizations", value: "82", change: "92% of total", icon: CheckCircle },
-  { title: "Monthly Revenue", value: "$127,450", change: "+12% last month", icon: DollarSign },
-  { title: "Avg. Files / Org", value: "156", change: "+23 this month", icon: FileText },
-];
+export default async function OrganizationsPage() {
+  const supabase = createClient();
+  const { data: orgs, error } = await supabase.from('organizations').select('*, profiles(count), financial_records(count)');
+  
+  if (error) {
+    console.error('Error fetching organizations:', error);
+  }
 
-const mockOrgs = [
-    { id: '1', name: 'Innovate LLC', industry: 'Technology', admin: 'john@innovate.com', users: 52, files: 1250, lastActivity: '2h ago', status: 'active', plan: 'professional' },
-    { id: '2', name: 'HealthFirst Partners', industry: 'Healthcare', admin: 'sarah@healthfirst.com', users: 150, files: 8734, lastActivity: '1d ago', status: 'active', plan: 'enterprise' },
-    { id: '3', name: 'Finance Pro', industry: 'Finance', admin: 'mike@financepro.com', users: 25, files: 450, lastActivity: '5h ago', status: 'trial', plan: 'free' },
-    { id: '4', name: 'Manufacture Corp', industry: 'Manufacturing', admin: 'dave@mcorp.com', users: 300, files: 15200, lastActivity: '3d ago', status: 'inactive', plan: 'professional' },
-    { id: '5', name: 'Retail Solutions', industry: 'Retail', admin: 'emily@retailsol.com', users: 80, files: 2300, lastActivity: '1w ago', status: 'suspended', plan: 'basic' },
-    { id: '6', name: 'TechStart Inc.', industry: 'Technology', admin: 'lisa@techstart.com', users: 15, files: 320, lastActivity: '2d ago', status: 'active', plan: 'basic' },
-    { id: '7', name: 'Global Finance', industry: 'Finance', admin: 'peter@globalfin.com', users: 500, files: 25000, lastActivity: '6h ago', status: 'active', plan: 'enterprise' },
-    { id: '8', name: 'Carewell Clinic', industry: 'Healthcare', admin: 'susan@carewell.com', users: 45, files: 3400, lastActivity: '5d ago', status: 'inactive', plan: 'professional' },
-    { id: '9', name: 'AutoParts Direct', industry: 'Manufacturing', admin: 'brian@autoparts.com', users: 120, files: 6800, lastActivity: '4h ago', status: 'active', plan: 'professional' },
-    { id: '10', name: 'Fashion Forward', industry: 'Retail', admin: 'olivia@fashionfwd.com', users: 35, files: 980, lastActivity: '1d ago', status: 'trial', plan: 'free' },
-];
+  const stats = {
+    total: orgs?.length ?? 0,
+    active: orgs?.filter(o => o.status === 'active').length ?? 0,
+    revenue: orgs?.reduce((acc, o) => acc + (o.monthly_revenue ?? 0), 0) ?? 0,
+    avgFiles: (orgs?.reduce((acc, o) => acc + (o.financial_records[0]?.count ?? 0), 0) ?? 0) / (orgs?.length || 1),
+  };
+
+  const statsCards = [
+    { title: "Total Organizations", value: stats.total, change: "+7 this month", icon: Building },
+    { title: "Active Organizations", value: stats.active, change: `${stats.total > 0 ? ((stats.active / stats.total) * 100).toFixed(0) : 0}% of total`, icon: CheckCircle },
+    { title: "Monthly Revenue", value: `$${stats.revenue.toLocaleString()}`, change: "+12% last month", icon: DollarSign },
+    { title: "Avg. Files / Org", value: stats.avgFiles.toFixed(0), change: "+23 this month", icon: FileText },
+  ];
+
+  const tableOrgs = orgs?.map(org => ({
+      id: org.id,
+      name: org.name,
+      industry: org.industry ?? 'N/A',
+      admin: 'N/A', // This needs a proper join or separate query
+      users: org.profiles[0]?.count ?? 0,
+      files: org.financial_records[0]?.count ?? 0,
+      lastActivity: 'N/A', // This needs to be tracked
+      status: org.status as any,
+      plan: org.plan as any,
+  })) ?? [];
 
 
-export default function OrganizationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">
@@ -118,7 +128,7 @@ export default function OrganizationsPage() {
             </div>
         </CardHeader>
         <CardContent>
-           <OrganizationsTable organizations={mockOrgs} />
+           <OrganizationsTable organizations={tableOrgs} />
         </CardContent>
       </Card>
     </div>

@@ -40,6 +40,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '@/hooks/use-auth-context';
+import { createClient } from '@/lib/supabase/client';
+import { createFinancialRecord, runComplianceCheck } from '@/app/actions/records';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -50,15 +53,6 @@ type UploadableFile = {
   status: 'pending' | 'uploading' | 'analyzing' | 'success' | 'error';
   error?: string;
 };
-
-const recentUploadsMock = [
-    { id: '1', name: 'Invoice_March2025.pdf', date: '2 hours ago', size: '2.4 MB', status: 'completed', analysis: 'Complete' },
-    { id: '2', name: 'Q1_Financial_Data.xlsx', date: '8 hours ago', size: '15.1 MB', status: 'completed', analysis: 'Complete' },
-    { id: '3', name: 'Vendor_Receipts.zip', date: 'Yesterday', size: '32.8 MB', status: 'processing', analysis: 'Analyzing' },
-    { id: '4', name: 'Client_Onboarding_Form.pdf', date: '2 days ago', size: '850 KB', status: 'completed', analysis: 'In Queue' },
-    { id: '5', name: 'Transaction_Log_Sept.csv', date: '4 days ago', size: '22.5 MB', status: 'failed', analysis: 'Failed' },
-    { id: '6', name: 'Proof_of_payment.png', date: '5 days ago', size: '1.2 MB', status: 'completed', analysis: 'Complete' },
-];
 
 const getFileIcon = (fileType: string) => {
     if (fileType.includes('pdf')) return <FileText className="h-6 w-6 text-red-500" />;
@@ -86,7 +80,29 @@ const getStatusBadge = (status: 'processing' | 'completed' | 'failed') => {
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadableFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [recentUploads, setRecentUploads] = useState<any[]>([]);
   const { toast } = useToast();
+  const { profile } = useAuth();
+  const supabase = createClient();
+
+  const fetchRecentUploads = useCallback(async () => {
+    if (!profile) return;
+    const { data, error } = await supabase
+        .from('financial_records')
+        .select('*')
+        .eq('organization_id', profile.organization_id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+    if (error) {
+        toast({ title: "Error fetching uploads", description: error.message, variant: "destructive" });
+    } else {
+        setRecentUploads(data);
+    }
+  }, [profile, supabase, toast]);
+
+  useState(() => {
+    fetchRecentUploads();
+  });
 
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
     if (fileRejections.length > 0) {
@@ -133,42 +149,59 @@ export default function UploadPage() {
   ), [isDragActive, isDragAccept, isDragReject]);
 
   const handleUpload = async () => {
+    if (!profile) {
+        toast({ title: 'Error', description: 'You must be logged in to upload files.', variant: 'destructive' });
+        return;
+    }
     const pendingFiles = files.filter(f => f.status === 'pending');
     if (pendingFiles.length === 0) return;
 
     setIsUploading(true);
 
-    const uploadPromises = pendingFiles.map(uploadableFile => {
-      return new Promise<void>((resolve) => {
+    const uploadPromises = pendingFiles.map(async (uploadableFile) => {
         setFiles(prev => prev.map(f => f.id === uploadableFile.id ? { ...f, status: 'uploading' } : f));
+        const filePath = `${profile.organization_id}/${profile.id}/${uuidv4()}-${uploadableFile.file.name}`;
         
-        // Simulate upload
-        const interval = setInterval(() => {
-          setFiles(prev => prev.map(f => {
-            if (f.id === uploadableFile.id && f.status === 'uploading') {
-              const newProgress = Math.min(f.progress + 10, 100);
-              if (newProgress === 100) {
-                clearInterval(interval);
-                setTimeout(() => {
-                    setFiles(p => p.map(file => file.id === uploadableFile.id ? {...file, status: 'success'} : file));
-                    resolve();
-                }, 500);
-              }
-              return { ...f, progress: newProgress };
-            }
-            return f;
-          }));
-        }, 200);
-      });
+        const { error: uploadError } = await supabase.storage
+            .from('financial-records')
+            .upload(filePath, uploadableFile.file, {
+                cacheControl: '3600',
+                upsert: false,
+                contentType: uploadableFile.file.type,
+            });
+
+        if (uploadError) {
+             setFiles(prev => prev.map(f => f.id === uploadableFile.id ? { ...f, status: 'error', error: uploadError.message } : f));
+             return;
+        }
+
+        setFiles(prev => prev.map(f => f.id === uploadableFile.id ? { ...f, progress: 100, status: 'analyzing' } : f));
+
+        const record = await createFinancialRecord({
+            organization_id: profile.organization_id!,
+            file_name: uploadableFile.file.name,
+            file_path: filePath,
+            file_type: uploadableFile.file.type,
+            file_size: uploadableFile.file.size,
+        });
+
+        await runComplianceCheck({
+            recordId: record.id,
+            filePath: filePath,
+            fileType: uploadableFile.file.type,
+        });
+
+        setFiles(prev => prev.map(f => f.id === uploadableFile.id ? { ...f, status: 'success' } : f));
     });
     
     await Promise.all(uploadPromises);
     setIsUploading(false);
     toast({
         title: "Upload Complete",
-        description: `${pendingFiles.length} file(s) have been successfully uploaded.`
+        description: `Processing finished for ${pendingFiles.length} file(s).`
     })
     setFiles(prev => prev.filter(f => f.status !== 'success'));
+    fetchRecentUploads(); // Refresh the list
   };
   
   const removeFile = (id: string) => {
@@ -221,11 +254,12 @@ export default function UploadPage() {
                       </div>
                     </div>
                     <div className="w-1/3 mx-4">
-                        {(uploadableFile.status === 'uploading' || uploadableFile.status === 'success') && (
+                        {(uploadableFile.status === 'uploading' || uploadableFile.status === 'success' || uploadableFile.status === 'analyzing') && (
                            <Progress value={uploadableFile.progress} className="h-2" />
                         )}
-                        {uploadableFile.status === 'success' && <div className="flex items-center text-sm text-green-600 mt-1"><CheckCircle className="h-4 w-4 mr-1" />Uploaded</div>}
-                        {uploadableFile.status === 'error' && <div className="flex items-center text-sm text-destructive mt-1"><AlertCircle className="h-4 w-4 mr-1" />Error</div>}
+                        {uploadableFile.status === 'success' && <div className="flex items-center text-sm text-green-600 mt-1"><CheckCircle className="h-4 w-4 mr-1" />Success</div>}
+                         {uploadableFile.status === 'analyzing' && <div className="flex items-center text-sm text-blue-600 mt-1"><Loader2 className="h-4 w-4 mr-1 animate-spin" />Analyzing...</div>}
+                        {uploadableFile.status === 'error' && <div className="flex items-center text-sm text-destructive mt-1"><AlertCircle className="h-4 w-4 mr-1" />{uploadableFile.error}</div>}
                     </div>
                     <Button
                       variant="ghost"
@@ -319,7 +353,7 @@ export default function UploadPage() {
                     <CardTitle>Recent Uploads</CardTitle>
                     <CardDescription>Review your recently uploaded documents.</CardDescription>
                 </div>
-                 <Button variant="outline" size="sm">
+                 <Button variant="outline" size="sm" onClick={fetchRecentUploads}>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh
                 </Button>
@@ -331,24 +365,20 @@ export default function UploadPage() {
                             <TableHead>File Name</TableHead>
                             <TableHead>Size</TableHead>
                             <TableHead>Upload Date</TableHead>
-                            <TableHead>Upload Status</TableHead>
-                            <TableHead>Analysis Status</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {recentUploadsMock.map(file => (
+                        {recentUploads.map(file => (
                             <TableRow key={file.id}>
                                 <TableCell className="font-medium flex items-center gap-2">
-                                    {getFileIcon(file.name.split('.').pop() || '')}
-                                    {file.name}
+                                    {getFileIcon(file.file_type || '')}
+                                    {file.file_name}
                                 </TableCell>
-                                <TableCell>{file.size}</TableCell>
-                                <TableCell>{file.date}</TableCell>
+                                <TableCell>{(file.file_size / 1024 / 1024).toFixed(2)} MB</TableCell>
+                                <TableCell>{new Date(file.created_at).toLocaleDateString()}</TableCell>
                                 <TableCell>{getStatusBadge(file.status as any)}</TableCell>
-                                <TableCell>
-                                    <Badge variant={file.analysis === 'Complete' ? 'default' : 'secondary'}>{file.analysis}</Badge>
-                                </TableCell>
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                                     <Button variant="ghost" size="icon"><Download className="h-4 w-4" /></Button>
@@ -362,5 +392,4 @@ export default function UploadPage() {
         </Card>
     </div>
   );
-
-    
+}

@@ -27,8 +27,8 @@ export function UserSearch({ initialSearch }: { initialSearch?: string }) {
       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
       <Input
         type="search"
-        placeholder="Search users by name or email..."
-        className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
+        placeholder="Search by name, email, or organization..."
+        className="w-full rounded-lg bg-background pl-8 md:w-[300px] lg:w-[400px]"
         defaultValue={initialSearch}
         onChange={(e) => handleSearch(e.target.value)}
       />

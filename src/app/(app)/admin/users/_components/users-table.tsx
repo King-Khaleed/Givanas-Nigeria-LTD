@@ -7,6 +7,8 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
+  SortingState,
+  getSortedRowModel,
 } from "@tanstack/react-table"
 import {
   Table,
@@ -20,7 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Profile } from "@/lib/types"
 import { format } from 'date-fns'
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, ArrowUpDown } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,8 +35,37 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { updateUserRole, toggleUserActive } from "../actions";
 import { useToast } from "@/hooks/use-toast"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 type UserWithOrg = Profile & { organization: { name: string } | null };
+
+const getInitials = (name: string | null) => {
+    if (!name) return "AW";
+    const names = name.split(" ");
+    if (names.length === 1) return names[0].charAt(0).toUpperCase();
+    return (
+      names[0].charAt(0) + names[names.length - 1].charAt(0)
+    ).toUpperCase();
+};
+
+const RoleBadge = ({ role }: { role: 'admin' | 'staff' | 'client' }) => {
+    const variant = {
+        admin: 'destructive',
+        staff: 'default',
+        client: 'secondary'
+    }[role]  as "default" | "secondary" | "destructive" | "outline" | null | undefined;
+
+    return <Badge variant={variant} className="capitalize">{role}</Badge>
+}
+
+const StatusBadge = ({ isActive }: { isActive: boolean }) => {
+     return (
+        <div className="flex items-center">
+            <span className={`h-2 w-2 rounded-full mr-2 ${isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+            {isActive ? "Active" : "Inactive"}
+        </div>
+    )
+}
 
 export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCount: number }) {
   const router = useRouter();
@@ -42,6 +73,7 @@ export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCou
   const pathname = usePathname();
   const { toast } = useToast();
   const currentPage = Number(searchParams.get('page')) || 1;
+  const [sorting, setSorting] = React.useState<SortingState>([])
 
   const handleRoleChange = async (userId: string, role: 'admin' | 'staff' | 'client') => {
     try {
@@ -89,38 +121,52 @@ export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCou
     },
     {
       accessorKey: "full_name",
-      header: "User",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            User
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-            <div className="font-medium">{row.original.full_name}</div>
+        <div className="flex items-center gap-3">
+             <Avatar className="h-10 w-10">
+                <AvatarImage src={`https://i.pravatar.cc/150?u=${row.original.id}`} />
+                <AvatarFallback>{getInitials(row.original.full_name)}</AvatarFallback>
+            </Avatar>
+            <div>
+                <div className="font-medium">{row.original.full_name}</div>
+                <div className="text-sm text-muted-foreground">{row.original.email}</div>
+            </div>
         </div>
       ),
     },
     {
-      accessorKey: "email",
-      header: "Email",
-    },
-    {
       accessorKey: "role",
       header: "Role",
-      cell: ({ row }) => <Badge variant="secondary">{row.original.role}</Badge>,
+      cell: ({ row }) => <RoleBadge role={row.original.role} />,
     },
     {
-      header: "Organization",
-      accessorFn: row => row.organization?.name,
+        header: "Organization",
+        accessorFn: row => row.organization?.name,
+        cell: ({ row }) => (
+            <Button variant="link" className="p-0 h-auto">
+                {row.original.organization?.name}
+            </Button>
+        )
     },
     {
       accessorKey: "is_active",
       header: "Status",
-      cell: ({ row }) => (
-        <Badge variant={row.original.is_active ? "default" : "destructive"}>
-          {row.original.is_active ? "Active" : "Inactive"}
-        </Badge>
-      ),
+      cell: ({ row }) => <StatusBadge isActive={row.original.is_active} />
     },
     {
       accessorKey: "created_at",
-      header: "Joined Date",
+      header: "Registration Date",
       cell: ({ row }) => format(new Date(row.original.created_at), "PPP"),
     },
     {
@@ -141,12 +187,13 @@ export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCou
                 Copy user ID
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'admin')}>Set as Admin</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'staff')}>Set as Staff</DropdownMenuItem>
+              <DropdownMenuItem>Edit</DropdownMenuItem>
+              <DropdownMenuItem>View Profile</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleActiveToggle(user.id, !user.is_active)}>
                 {user.is_active ? 'Deactivate' : 'Activate'}
               </DropdownMenuItem>
+               <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -161,7 +208,10 @@ export function UsersTable({ users, pageCount }: { users: UserWithOrg[], pageCou
     columns,
     getCoreRowModel: getCoreRowModel(),
     onRowSelectionChange: setRowSelection,
+     onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
     state: {
+       sorting,
       rowSelection,
     },
     pageCount,

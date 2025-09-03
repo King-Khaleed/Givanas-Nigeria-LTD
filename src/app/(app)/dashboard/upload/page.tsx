@@ -1,17 +1,45 @@
 
 'use client';
 
-import {useState, useCallback} from 'react';
-import {useDropzone} from 'react-dropzone';
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card';
-import {Button} from '@/components/ui/button';
-import {useToast} from '@/hooks/use-toast';
-import {createClient} from '@/lib/supabase/client';
-import {Loader2, UploadCloud, File as FileIcon, CheckCircle, AlertCircle, X} from 'lucide-react';
-import {Progress} from '@/components/ui/progress';
-import {useRouter} from 'next/navigation';
-import {createFinancialRecord, getSignedUrl, runComplianceCheck} from '@/app/actions/records';
-import {v4 as uuidv4} from 'uuid';
+import { useState, useCallback, useMemo } from 'react';
+import { useDropzone, type FileRejection } from 'react-dropzone';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from '@/components/ui/badge';
+import {
+  UploadCloud,
+  File as FileIcon,
+  CheckCircle,
+  AlertCircle,
+  X,
+  Loader2,
+  FileText,
+  FileSpreadsheet,
+  FileImage,
+  FileBarChart2,
+  Download,
+  Trash2,
+  RefreshCw,
+  Eye
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { v4 as uuidv4 } from 'uuid';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -21,41 +49,69 @@ type UploadableFile = {
   progress: number;
   status: 'pending' | 'uploading' | 'analyzing' | 'success' | 'error';
   error?: string;
-  recordId?: string;
 };
+
+const recentUploadsMock = [
+    { id: '1', name: 'Invoice_March2025.pdf', date: '2 hours ago', size: '2.4 MB', status: 'completed', analysis: 'Complete' },
+    { id: '2', name: 'Q1_Financial_Data.xlsx', date: '8 hours ago', size: '15.1 MB', status: 'completed', analysis: 'Complete' },
+    { id: '3', name: 'Vendor_Receipts.zip', date: 'Yesterday', size: '32.8 MB', status: 'processing', analysis: 'Analyzing' },
+    { id: '4', name: 'Client_Onboarding_Form.pdf', date: '2 days ago', size: '850 KB', status: 'completed', analysis: 'In Queue' },
+    { id: '5', name: 'Transaction_Log_Sept.csv', date: '4 days ago', size: '22.5 MB', status: 'failed', analysis: 'Failed' },
+    { id: '6', name: 'Proof_of_payment.png', date: '5 days ago', size: '1.2 MB', status: 'completed', analysis: 'Complete' },
+];
+
+const getFileIcon = (fileType: string) => {
+    if (fileType.includes('pdf')) return <FileText className="h-6 w-6 text-red-500" />;
+    if (fileType.includes('spreadsheet') || fileType.includes('excel') || fileType.includes('xls')) return <FileSpreadsheet className="h-6 w-6 text-green-500" />;
+    if (fileType.includes('csv')) return <FileBarChart2 className="h-6 w-6 text-blue-500" />;
+    if (fileType.includes('image')) return <FileImage className="h-6 w-6 text-purple-500" />;
+    return <FileIcon className="h-6 w-6 text-gray-500" />;
+}
+
+const getStatusBadge = (status: 'processing' | 'completed' | 'failed') => {
+    const variants = {
+        processing: { className: "bg-orange-100 text-orange-800", icon: <Loader2 className="h-3 w-3 animate-spin" /> },
+        completed: { className: "bg-green-100 text-green-800", icon: <CheckCircle className="h-3 w-3" /> },
+        failed: { className: "bg-red-100 text-red-800", icon: <X className="h-3 w-3" /> }
+    }
+    const variant = variants[status];
+    return (
+        <Badge className={cn("capitalize gap-1", variant.className)}>
+            {variant.icon}
+            {status}
+        </Badge>
+    )
+}
 
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadableFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const {toast} = useToast();
-  const router = useRouter();
-  const supabase = createClient();
+  const { toast } = useToast();
 
-  const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
     if (fileRejections.length > 0) {
-      fileRejections.forEach(({errors}) => {
-        errors.forEach((err: any) => {
+      fileRejections.forEach(({ file, errors }) => {
+        errors.forEach((err) => {
           toast({
-            title: 'File Error',
+            title: `Error with ${file.name}`,
             description: err.message,
             variant: 'destructive',
           });
         });
       });
-      return;
     }
 
-    const newFiles = acceptedFiles.map(file => ({
+    const newFiles: UploadableFile[] = acceptedFiles.map(file => ({
       id: uuidv4(),
       file,
       progress: 0,
-      status: 'pending' as const,
+      status: 'pending',
     }));
 
-    setFiles(prev => [...prev, ...newFiles]);
+    setFiles(prev => [...prev, ...newFiles.filter(nf => !prev.some(ef => ef.file.name === nf.file.name))]);
   }, [toast]);
 
-  const {getRootProps, getInputProps, isDragActive} = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, isDragAccept, isDragReject } = useDropzone({
     onDrop,
     maxSize: MAX_FILE_SIZE,
     accept: {
@@ -67,157 +123,96 @@ export default function UploadPage() {
       'image/png': ['.png'],
     },
   });
+  
+  const dropzoneClassName = useMemo(() => cn(
+    'flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg min-h-[300px] w-full max-w-2xl mx-auto text-center cursor-pointer transition-colors duration-300',
+    isDragAccept && 'border-green-500 bg-green-50',
+    isDragReject && 'border-red-500 bg-red-50',
+    isDragActive && 'border-primary bg-primary/10',
+    !isDragActive && 'border-border hover:border-primary'
+  ), [isDragActive, isDragAccept, isDragReject]);
 
   const handleUpload = async () => {
-    if (files.some(f => f.status === 'uploading' || f.status === 'analyzing')) return;
+    const pendingFiles = files.filter(f => f.status === 'pending');
+    if (pendingFiles.length === 0) return;
 
     setIsUploading(true);
 
-    const {data: {user}} = await supabase.auth.getUser();
-    if (!user) {
-      toast({title: 'Not authenticated', variant: 'destructive'});
-      setIsUploading(false);
-      return;
-    }
-    
-    const {data: profile} = await supabase.from('profiles').select('organization_id').single();
-    if (!profile || !profile.organization_id) {
-        toast({title: 'Organization not found for user.', variant: 'destructive'});
-        setIsUploading(false);
-        return;
-    }
-
-    const uploadPromises = files
-      .filter(f => f.status === 'pending')
-      .map(async uploadableFile => {
-        try {
-          // 1. Set status to uploading
-          setFiles(prev =>
-            prev.map(f =>
-              f.id === uploadableFile.id ? {...f, status: 'uploading'} : f
-            )
-          );
+    const uploadPromises = pendingFiles.map(uploadableFile => {
+      return new Promise<void>((resolve) => {
+        setFiles(prev => prev.map(f => f.id === uploadableFile.id ? { ...f, status: 'uploading' } : f));
         
-          const {file} = uploadableFile;
-          
-          // 2. Get signed URL
-          const {url, path} = await getSignedUrl({
-            fileType: file.type,
-            fileSize: file.size,
-            organizationId: profile.organization_id!,
-          });
-          
-          // 3. Upload file to Supabase storage
-          const {error: uploadError} = await supabase.storage
-            .from('financial-records')
-            .uploadToSignedUrl(path, url.token, file, {
-              upsert: true,
-               onUploadProgress: (progress) => {
-                 const percentage = (progress.loaded / progress.total) * 100;
-                 setFiles(prev =>
-                    prev.map(f =>
-                        f.id === uploadableFile.id ? {...f, progress: percentage} : f
-                    )
-                 );
-               }
-            });
-
-          if (uploadError) throw new Error(`Upload Error: ${uploadError.message}`);
-
-          // 4. Create record in database
-          const record = await createFinancialRecord({
-            organization_id: profile.organization_id!,
-            file_name: file.name,
-            file_path: path,
-            file_type: file.type,
-            file_size: file.size,
-          });
-
-          // 5. Set status to analyzing
-          setFiles(prev =>
-            prev.map(f =>
-              f.id === uploadableFile.id ? {...f, status: 'analyzing', recordId: record.id} : f
-            )
-          );
-
-          // 6. Trigger AI analysis
-          await runComplianceCheck({recordId: record.id, filePath: record.file_path, fileType: record.file_type});
-
-          // 7. Set status to success
-          setFiles(prev =>
-            prev.map(f =>
-              f.id === uploadableFile.id
-                ? {...f, status: 'success', progress: 100}
-                : f
-            )
-          );
-        } catch (error: any) {
-          setFiles(prev =>
-            prev.map(f =>
-              f.id === uploadableFile.id
-                ? {...f, status: 'error', error: error.message}
-                : f
-            )
-          );
-        }
+        // Simulate upload
+        const interval = setInterval(() => {
+          setFiles(prev => prev.map(f => {
+            if (f.id === uploadableFile.id && f.status === 'uploading') {
+              const newProgress = Math.min(f.progress + 10, 100);
+              if (newProgress === 100) {
+                clearInterval(interval);
+                setTimeout(() => {
+                    setFiles(p => p.map(file => file.id === uploadableFile.id ? {...file, status: 'success'} : file));
+                    resolve();
+                }, 500);
+              }
+              return { ...f, progress: newProgress };
+            }
+            return f;
+          }));
+        }, 200);
       });
-
+    });
+    
     await Promise.all(uploadPromises);
     setIsUploading(false);
     toast({
-        title: "Uploads Complete",
-        description: "Successfully processed all pending files. Analysis is running.",
+        title: "Upload Complete",
+        description: `${pendingFiles.length} file(s) have been successfully uploaded.`
     })
-    router.push('/dashboard/records');
-    router.refresh();
+    setFiles(prev => prev.filter(f => f.status !== 'success'));
   };
   
-   const removeFile = (id: string) => {
+  const removeFile = (id: string) => {
     setFiles(files.filter(f => f.id !== id));
   };
-
+  
+  const clearQueue = () => {
+    setFiles([]);
+  }
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-headline">Upload Financial Records</h1>
         <p className="text-muted-foreground">
-          Drag and drop your files or browse to upload. Analysis will begin automatically.
+          Upload your financial documents for automated analysis and audit reporting.
         </p>
       </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle>File Uploader</CardTitle>
-          <CardDescription>
-            Supported formats: PDF, Excel, CSV, JPG, PNG. Max file size: 50MB.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div
-            {...getRootProps()}
-            className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg min-h-[300px] text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-primary bg-primary/10' : 'border-border'
-            }`}
-          >
+        <CardContent className="p-6">
+          <div {...getRootProps({ className: dropzoneClassName })}>
             <input {...getInputProps()} />
-            <UploadCloud className="w-16 h-16 text-muted-foreground" />
+            <UploadCloud className={`w-16 h-16 text-muted-foreground transition-colors ${isDragActive ? 'text-primary' : ''}`} />
             <h3 className="mt-4 text-lg font-semibold">
               {isDragActive ? 'Drop the files here...' : 'Drag and drop files here'}
             </h3>
-            <p className="text-muted-foreground">or</p>
-            <Button type="button" variant="link" className="mt-2 text-primary hover:underline">
-              browse your files
-            </Button>
+            <p className="text-muted-foreground">or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-2">Maximum file size: 50MB</p>
           </div>
-
-          {files.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Selected Files</h3>
-              <div className="space-y-2">
+        </CardContent>
+      </Card>
+      
+      {files.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload Queue ({files.filter(f => f.status === 'pending').length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+             <div className="space-y-2 max-h-72 overflow-y-auto pr-2">
                 {files.map(uploadableFile => (
-                  <div key={uploadableFile.id} className="flex items-center justify-between p-2 border rounded-md">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <FileIcon className="h-6 w-6 text-muted-foreground" />
+                  <div key={uploadableFile.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      {getFileIcon(uploadableFile.file.type)}
                       <div className="flex-1 min-w-0">
                         <p className="truncate font-medium">{uploadableFile.file.name}</p>
                         <p className="text-sm text-muted-foreground">
@@ -226,47 +221,146 @@ export default function UploadPage() {
                       </div>
                     </div>
                     <div className="w-1/3 mx-4">
-                      {(uploadableFile.status === 'uploading' || uploadableFile.status === 'analyzing') && (
-                         <Progress value={uploadableFile.progress} />
-                      )}
-                      {uploadableFile.status === 'analyzing' && (
-                           <div className="flex items-center text-sm text-muted-foreground mt-1">
-                             <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analyzing...
-                          </div>
-                      )}
-                      {uploadableFile.status === 'success' && (
-                          <div className="flex items-center text-green-600">
-                             <CheckCircle className="h-4 w-4 mr-2" /> Complete
-                          </div>
-                      )}
-                      {uploadableFile.status === 'error' && (
-                           <div className="flex items-center text-destructive" title={uploadableFile.error}>
-                             <AlertCircle className="h-4 w-4 mr-2" /> Error
-                          </div>
-                      )}
+                        {(uploadableFile.status === 'uploading' || uploadableFile.status === 'success') && (
+                           <Progress value={uploadableFile.progress} className="h-2" />
+                        )}
+                        {uploadableFile.status === 'success' && <div className="flex items-center text-sm text-green-600 mt-1"><CheckCircle className="h-4 w-4 mr-1" />Uploaded</div>}
+                        {uploadableFile.status === 'error' && <div className="flex items-center text-sm text-destructive mt-1"><AlertCircle className="h-4 w-4 mr-1" />Error</div>}
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => removeFile(uploadableFile.id)}
-                      disabled={isUploading}
+                      disabled={isUploading && uploadableFile.status === 'uploading'}
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-              </div>
-               <div className="flex justify-end gap-2">
-                 <Button variant="outline" onClick={() => setFiles([])} disabled={isUploading}>Clear All</Button>
-                <Button onClick={handleUpload} disabled={isUploading || files.every(f => f.status !== 'pending')}>
-                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Upload {files.filter(f => f.status === 'pending').length} File(s)
-                </Button>
-               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+             <div className="flex justify-end gap-2 pt-4 border-t">
+               <Button variant="outline" onClick={clearQueue} disabled={isUploading}>Clear Queue</Button>
+              <Button onClick={handleUpload} disabled={isUploading || !files.some(f => f.status === 'pending')}>
+                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Upload {files.filter(f => f.status === 'pending').length} File(s)
+              </Button>
+             </div>
+          </CardContent>
+        </Card>
+      )}
+
+       <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="item-1">
+                <AccordionTrigger>Advanced Options</AccordionTrigger>
+                <AccordionContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="org-folder">Organization Folder</Label>
+                            <Select>
+                                <SelectTrigger id="org-folder">
+                                    <SelectValue placeholder="Select a folder" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="acme-corp">Acme Corporation</SelectItem>
+                                    <SelectItem value="innovate-llc">Innovate LLC</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="doc-category">Document Category</Label>
+                            <Select>
+                                <SelectTrigger id="doc-category">
+                                    <SelectValue placeholder="Select a category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="invoices">Invoices</SelectItem>
+                                    <SelectItem value="receipts">Receipts</SelectItem>
+                                    <SelectItem value="statements">Statements</SelectItem>
+                                    <SelectItem value="reports">Reports</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="tags">Add Tags</Label>
+                            <Input id="tags" placeholder="e.g., Q3, financials, urgent" />
+                        </div>
+                        <div className="space-y-2">
+                             <Label>Priority Level</Label>
+                             <RadioGroup defaultValue="normal" className="flex items-center gap-4">
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="normal" id="normal" />
+                                    <Label htmlFor="normal">Normal</Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="high" id="high" />
+                                    <Label htmlFor="high">High</Label>
+                                </div>
+                             </RadioGroup>
+                        </div>
+                         <div className="col-span-1 md:col-span-2 space-y-4">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox id="auto-analysis" defaultChecked />
+                                <Label htmlFor="auto-analysis">Start analysis immediately after upload</Label>
+                            </div>
+                             <div className="flex items-center space-x-2">
+                                <Checkbox id="email-notification" />
+                                <Label htmlFor="email-notification">Email me when analysis is complete</Label>
+                            </div>
+                        </div>
+                    </div>
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
+
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Recent Uploads</CardTitle>
+                    <CardDescription>Review your recently uploaded documents.</CardDescription>
+                </div>
+                 <Button variant="outline" size="sm">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                </Button>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>File Name</TableHead>
+                            <TableHead>Size</TableHead>
+                            <TableHead>Upload Date</TableHead>
+                            <TableHead>Upload Status</TableHead>
+                            <TableHead>Analysis Status</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {recentUploadsMock.map(file => (
+                            <TableRow key={file.id}>
+                                <TableCell className="font-medium flex items-center gap-2">
+                                    {getFileIcon(file.name.split('.').pop() || '')}
+                                    {file.name}
+                                </TableCell>
+                                <TableCell>{file.size}</TableCell>
+                                <TableCell>{file.date}</TableCell>
+                                <TableCell>{getStatusBadge(file.status as any)}</TableCell>
+                                <TableCell>
+                                    <Badge variant={file.analysis === 'Complete' ? 'default' : 'secondary'}>{file.analysis}</Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon"><Download className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
     </div>
   );
-}
+
+    

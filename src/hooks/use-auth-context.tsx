@@ -1,109 +1,91 @@
 
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { AuthSession, User } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import type { Profile } from '@/lib/types';
 
 const supabase = createClient();
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
-  session: AuthSession | null;
+  session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  refreshSession: () => Promise<AuthSession | null>;
-  waitForSession: (timeoutMs?: number) => Promise<boolean>;
-}
+};
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshSession = useCallback(async () => {
-    setLoading(true);
-    const { data: { session: newSession } } = await supabase.auth.getSession();
-    setSession(newSession);
-    setUser(newSession?.user ?? null);
-    if (newSession?.user) {
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', newSession.user.id)
-        .single();
-      setProfile(userProfile);
-    } else {
-      setProfile(null);
+  const getProfile = useCallback(async (user: User) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return null;
     }
-    setLoading(false);
-    return newSession;
+    return data;
   }, []);
 
   useEffect(() => {
     const getInitialSession = async () => {
-      await refreshSession();
-    };
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      setUser(session?.user ?? null);
 
+      if (session?.user) {
+        const profileData = await getProfile(session.user);
+        setProfile(profileData);
+      }
+      setLoading(false);
+    };
+    
     getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        
-        setLoading(true);
-        if (newSession?.user) {
-          const { data: userProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', newSession.user.id)
-            .single();
-          setProfile(userProfile);
+      async (_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          setLoading(true);
+          const profileData = await getProfile(session.user);
+          setProfile(profileData);
+          setLoading(false);
         } else {
           setProfile(null);
         }
-        setLoading(false);
       }
     );
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
-  }, [refreshSession]);
-  
-  const waitForSession = useCallback(async (timeoutMs = 3000) => {
-    // This is a helper for the login flow to ensure the onAuthStateChange listener has fired
-    // before we attempt to redirect the user.
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      if (user && profile) return true; // Check for user and profile
-      await new Promise(r => setTimeout(r, 150));
-    }
-    return !!(user && profile);
-  }, [user, profile]);
+  }, [getProfile]);
 
-
-  const value: AuthContextType = {
+  const value = {
     user,
     session,
     profile,
     loading,
-    refreshSession,
-    waitForSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (context === null) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};

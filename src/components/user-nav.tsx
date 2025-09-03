@@ -12,34 +12,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { logout } from "@/app/actions/auth";
+import { logout } from "@/app/actions/logout";
 import type { Profile } from "@/lib/types";
 import { CreditCard, LogOut, Settings, User } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth-context";
 
-interface UserNavProps {
-  profile: Profile | null;
-}
+interface UserNavProps {}
 
-export function UserNav({ profile }: UserNavProps) {
-  const [isClient, setIsClient] = useState(false);
+export function UserNav({}: UserNavProps) {
+  const { user, profile } = useAuth();
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  
   const getInitials = (name: string | null) => {
     if (!name) return "AW";
     const names = name.split(" ");
     if (names.length === 1) return names[0].charAt(0).toUpperCase();
-    return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+    return (
+      names[0].charAt(0) + names[names.length - 1].charAt(0)
+    ).toUpperCase();
   };
-  
-  if (!isClient || !profile) {
-     return (
-        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-     )
+
+  if (!profile || !user) {
+    return <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />;
   }
 
   return (
@@ -47,15 +41,20 @@ export function UserNav({ profile }: UserNavProps) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-9 w-9">
-            <AvatarImage src="/avatars/01.png" alt={profile.full_name ?? ""} />
-            <AvatarFallback>{getInitials(profile.full_name ?? null)}</AvatarFallback>
+            <AvatarImage
+              src="/avatars/01.png"
+              alt={profile.full_name ?? ""}
+            />
+            <AvatarFallback>{getInitials(profile.full_name)}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{profile.full_name}</p>
+            <p className="text-sm font-medium leading-none">
+              {profile.full_name}
+            </p>
             <p className="text-xs leading-none text-muted-foreground">
               {profile.email}
             </p>
@@ -69,7 +68,7 @@ export function UserNav({ profile }: UserNavProps) {
               <span>Profile</span>
             </Link>
           </DropdownMenuItem>
-          {profile.role === 'admin' && (
+          {profile.role === "admin" && (
             <DropdownMenuItem asChild>
               <Link href="/admin/settings">
                 <CreditCard className="mr-2 h-4 w-4" />

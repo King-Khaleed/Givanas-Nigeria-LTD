@@ -16,12 +16,14 @@ import { logout } from "@/app/actions/logout";
 import type { Profile } from "@/lib/types";
 import { CreditCard, LogOut, Settings, User } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/hooks/use-auth-context";
+import { useRouter } from "next/navigation";
 
-interface UserNavProps {}
+interface UserNavProps {
+  profile: Profile | null;
+}
 
-export function UserNav({}: UserNavProps) {
-  const { user, profile } = useAuth();
+export function UserNav({ profile }: UserNavProps) {
+  const router = useRouter();
 
   const getInitials = (name: string | null) => {
     if (!name) return "AW";
@@ -31,8 +33,13 @@ export function UserNav({}: UserNavProps) {
       names[0].charAt(0) + names[names.length - 1].charAt(0)
     ).toUpperCase();
   };
+  
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
 
-  if (!profile || !user) {
+  if (!profile) {
     return <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />;
   }
 
@@ -84,14 +91,10 @@ export function UserNav({}: UserNavProps) {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <form action={logout}>
-          <DropdownMenuItem asChild>
-            <button type="submit" className="w-full">
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Log out</span>
-            </button>
-          </DropdownMenuItem>
-        </form>
+        <DropdownMenuItem onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            <span>Log out</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

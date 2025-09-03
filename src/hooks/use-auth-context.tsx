@@ -13,6 +13,8 @@ type AuthContextType = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  refreshSession: () => Promise<void>;
+  waitForSession: (timeoutMs?: number) => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -37,20 +39,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data;
   }, []);
 
-  useEffect(() => {
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
+  const refreshSession = useCallback(async () => {
+    setLoading(true);
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if(error) {
+        console.error("Error refreshing session:", error);
+        setProfile(null);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+    }
 
-      if (session?.user) {
+    setSession(session);
+    setUser(session?.user ?? null);
+
+    if (session?.user) {
         const profileData = await getProfile(session.user);
         setProfile(profileData);
-      }
-      setLoading(false);
-    };
-    
-    getInitialSession();
+    } else {
+        setProfile(null);
+    }
+    setLoading(false);
+  }, [getProfile]);
+
+  useEffect(() => {
+    refreshSession(); // Initial session load
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -63,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         } else {
           setProfile(null);
+          setLoading(false);
         }
       }
     );
@@ -70,13 +86,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [getProfile]);
+  }, [getProfile, refreshSession]);
+  
+  const waitForSession = useCallback(async (timeoutMs = 5000) => {
+    if (session) return true;
+    
+    return new Promise<boolean>((resolve) => {
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+            if (supabase.auth.getSession()) {
+                clearInterval(interval);
+                resolve(true);
+            } else if (Date.now() - startTime > timeoutMs) {
+                clearInterval(interval);
+                resolve(false);
+            }
+        }, 100);
+    });
+  }, [session]);
 
   const value = {
     user,
     session,
     profile,
     loading,
+    refreshSession,
+    waitForSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -69,37 +69,35 @@ export async function login(values: z.infer<typeof loginSchema>) {
   const validatedFields = loginSchema.safeParse(values);
 
   if (!validatedFields.success) {
-    return { error: 'Invalid fields!' };
+    return { success: false, error: 'Invalid fields!' };
   }
   
   const { email, password } = validatedFields.data;
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user!.id)
-    .single();
 
-  if (profile?.role === 'admin') {
-      redirect('/admin');
-  }
-  if (profile?.role === 'staff') {
-      redirect('/dashboard/staff');
-  }
-  if (profile?.role === 'client') {
-      redirect('/dashboard/client');
+  if (data.user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single();
+    
+    return { success: true, role: profile?.role ?? "client" };
   }
   
-  redirect('/dashboard');
+  return { success: false, error: "An unknown error occurred." };
 }
 
+export async function logout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    return { success: true };
+}

@@ -24,15 +24,28 @@ export default function AppLayout({
     }
 
     if (!loading && user && profile) {
-        // Role-based route protection
-        if (pathname.startsWith('/admin') && profile.role !== 'admin') {
+        // This logic handles cases where a logged-in user with a specific role
+        // tries to access a dashboard they shouldn't. It will redirect them
+        // to their correct dashboard.
+        const isAdmin = profile.role === 'admin';
+        const isStaff = profile.role === 'staff';
+        const isClient = profile.role === 'client';
+
+        if (pathname.startsWith('/admin') && !isAdmin) {
             redirect('/dashboard');
         }
-        if (pathname.startsWith('/dashboard/staff') && profile.role !== 'staff') {
+        if (pathname.startsWith('/dashboard/staff') && !isStaff) {
             redirect('/dashboard');
         }
-        if (pathname.startsWith('/dashboard/client') && profile.role !== 'client') {
+        if (pathname.startsWith('/dashboard/client') && !isClient) {
             redirect('/dashboard');
+        }
+        
+        // Redirect from generic dashboard to role-specific one
+        if (pathname === '/dashboard') {
+            if (isAdmin) redirect('/admin');
+            if (isStaff) redirect('/dashboard/staff');
+            if (isClient) redirect('/dashboard/client');
         }
     }
   }, [user, profile, loading, pathname]);

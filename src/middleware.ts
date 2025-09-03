@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Just refresh the session and let the client-side handle redirects
+  // Just refresh the session and let the pages/layouts handle auth checks.
   await supabase.auth.getSession()
 
   return response

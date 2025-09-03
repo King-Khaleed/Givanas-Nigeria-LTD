@@ -16,11 +16,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { login } from "@/app/actions/auth";
-import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -33,9 +32,8 @@ const formSchema = z.object({
 });
 
 export function LoginForm() {
-  const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -47,30 +45,24 @@ export function LoginForm() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true);
-    const result = await login(values);
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    startTransition(async () => {
+      const result = await login(values);
 
-    if (result.error) {
-      toast({
-        title: "Login Failed",
-        description: result.error,
-        variant: "destructive",
-      });
-      setIsLoading(false);
-    } else {
-      toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-      });
-      
-      if (result.redirectTo) {
-        router.push(result.redirectTo);
+      if (result?.error) {
+        toast({
+          title: "Login Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else {
+         toast({
+          title: "Login Successful",
+          description: "Redirecting to your dashboard...",
+        });
+        // The redirect is now handled by the server action, so no client-side navigation is needed.
       }
-      
-      // This is crucial to re-fetch server state and trigger the layout to re-render
-      router.refresh();
-    }
+    });
   }
 
   return (
@@ -84,7 +76,7 @@ export function LoginForm() {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input placeholder="name@example.com" {...field} />
+                  <Input placeholder="name@example.com" {...field} disabled={isPending} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -102,6 +94,7 @@ export function LoginForm() {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       {...field}
+                      disabled={isPending}
                     />
                     <Button
                       type="button"
@@ -109,6 +102,7 @@ export function LoginForm() {
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isPending}
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -133,6 +127,7 @@ export function LoginForm() {
                     <Checkbox
                       checked={field.value}
                       onCheckedChange={field.onChange}
+                      disabled={isPending}
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
@@ -150,8 +145,8 @@ export function LoginForm() {
               Forgot password?
             </Link>
         </div>
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={isPending}>
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign In
         </Button>
       </form>

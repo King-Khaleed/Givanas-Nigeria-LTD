@@ -51,20 +51,21 @@ export async function login(values: z.infer<typeof loginSchema>) {
         });
     }
 
-
+    let redirectTo = '/dashboard';
     if (profile?.role === 'admin') {
-      return { success: true, redirectTo: '/admin' };
+      redirectTo = '/admin';
     }
      if (profile?.role === 'staff') {
-      return { success: true, redirectTo: '/dashboard/staff' };
+      redirectTo = '/dashboard/staff';
     }
      if (profile?.role === 'client') {
-      return { success: true, redirectTo: '/dashboard/client' };
+      redirectTo = '/dashboard/client';
     }
+    redirect(redirectTo);
   }
 
-
-  return { success: true, redirectTo: '/dashboard' };
+  // Fallback redirect, though it should ideally not be reached if login is successful.
+  redirect('/dashboard');
 }
 
 export async function signup(values: z.infer<typeof signupSchema>) {

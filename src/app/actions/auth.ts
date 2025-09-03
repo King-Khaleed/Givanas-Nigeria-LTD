@@ -100,5 +100,6 @@ export async function signup(values: z.infer<typeof signupSchema>) {
 export async function logout() {
   const supabase = createClient();
   await supabase.auth.signOut();
+  // The onAuthStateChange listener in the AuthProvider will handle the redirect.
   return { success: true };
 }

@@ -37,9 +37,7 @@ export function LoginForm() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
-  const auth = useAuth();
   const router = useRouter();
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -77,6 +75,7 @@ export function LoginForm() {
       } else if (result.role === 'client') {
         router.push("/dashboard/client");
       } else {
+        // Fallback to a generic dashboard, which will be redirected by the AppLayout
         router.push("/dashboard");
       }
     });

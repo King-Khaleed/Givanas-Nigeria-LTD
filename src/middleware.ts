@@ -3,6 +3,8 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/lib/types'
 
+// The middleware is responsible for refreshing the user's session cookie.
+// It does NOT handle authentication logic or redirects.
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -56,8 +58,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Just refresh the session and let the pages/layouts handle auth checks.
-  await supabase.auth.getSession()
+  // Refresh session
+  await supabase.auth.getUser()
 
   return response
 }

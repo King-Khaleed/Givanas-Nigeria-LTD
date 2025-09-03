@@ -62,11 +62,18 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
   
-  const publicRoutes = ['/', '/login', '/register', '/auth/callback']
+  const publicRoutes = ['/login', '/register', '/auth/callback']
   
-  if (!session && !publicRoutes.some(path => pathname.startsWith(path))) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // Allow the initial redirect from login to dashboard to pass through
+  const isRedirectingFromLogin = request.headers.get('referer')?.endsWith('/login');
+  
+  if (!session && !publicRoutes.includes(pathname) && !isRedirectingFromLogin) {
+    if (pathname.startsWith('/api')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL('/login', request.url));
   }
+
 
   if (session) {
       const { data: profile } = await supabase
@@ -75,28 +82,21 @@ export async function middleware(request: NextRequest) {
         .eq('id', session.user.id)
         .single()
 
-      if (pathname.startsWith('/login') || pathname.startsWith('/register') || pathname === '/') {
-        if (profile?.role === 'admin') {
-            return NextResponse.redirect(new URL('/admin', request.url))
-        }
-        if (profile?.role === 'staff') {
-            return NextResponse.redirect(new URL('/dashboard/staff', request.url))
-        }
-         if (profile?.role === 'client') {
-            return NextResponse.redirect(new URL('/dashboard/client', request.url))
-        }
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+      if (publicRoutes.includes(pathname) || pathname === '/') {
+        let redirectTo = '/dashboard';
+        if (profile?.role === 'admin') redirectTo = '/admin';
+        if (profile?.role === 'staff') redirectTo = '/dashboard/staff';
+        if (profile?.role === 'client') redirectTo = '/dashboard/client';
+        return NextResponse.redirect(new URL(redirectTo, request.url))
       }
 
       // Role-based route protection
       if (pathname.startsWith('/admin') && profile?.role !== 'admin') {
           return NextResponse.redirect(new URL('/dashboard', request.url))
       }
-
        if (pathname.startsWith('/dashboard/staff') && profile?.role !== 'staff') {
           return NextResponse.redirect(new URL('/dashboard', request.url))
       }
-
        if (pathname.startsWith('/dashboard/client') && profile?.role !== 'client') {
           return NextResponse.redirect(new URL('/dashboard', request.url))
       }

@@ -1,0 +1,18 @@
+# Netlify configuration file
+
+[build]
+  # Command to build the Next.js application
+  command = "npm run build"
+  
+  # Directory where the built assets are located
+  publish = ".next"
+
+[dev]
+  # Local development server settings
+  command = "npm run dev"
+  port = 9002
+  publish = ".next"
+
+[[plugins]]
+  # Essential Next.js plugin for Netlify
+  package = "@netlify/plugin-nextjs"
